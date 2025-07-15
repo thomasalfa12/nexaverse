@@ -1,0 +1,22 @@
+# Node
+node_modules/
+.next/
+dist/
+out/
+
+# Env
+.env
+.env.local
+
+# System
+.DS_Store
+
+# Artifacts (contracts)
+artifacts/
+cache/
+typechain/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
