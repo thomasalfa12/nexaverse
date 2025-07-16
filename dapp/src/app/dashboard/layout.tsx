@@ -1,16 +1,13 @@
-"use client";
-
+import type { ReactNode } from "react";
 import SideNav from "@/components/SideNav";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <>
       <SideNav />
-      <main className="flex-1 p-4">{children}</main>
-    </div>
+      <div className="pt-16 sm:ml-64">
+        <div className="p-4 max-w-4xl mx-auto">{children}</div>
+      </div>
+    </>
   );
 }

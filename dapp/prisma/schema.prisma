@@ -1,0 +1,40 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+model InstitutionRequest {
+  id               Int      @id @default(autoincrement())
+  name             String
+  officialWebsite  String
+  contactEmail     String
+  institutionType  Int
+  walletAddress    String   @unique
+  createdAt        DateTime @default(now())
+}
+
+model SBTRequest {
+  id        Int    @id @default(autoincrement())
+  to        String @db.Char(42)
+  tokenId   String @unique
+  uri       String @db.VarChar(2048)
+  deadline  BigInt @db.BigInt
+  createdAt DateTime @default(now())
+}
+
+
+model SBTSignature {
+  id        Int      @id @default(autoincrement())
+  to        String   @db.Char(42)
+  tokenId   String   @unique 
+  uri       String   @db.VarChar(2048)
+  deadline  BigInt   @db.BigInt
+  signature String   @db.Text
+  createdAt DateTime @default(now())
+}
+

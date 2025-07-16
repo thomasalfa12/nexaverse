@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { checkIsInstitution } from './checkRegistryOnChain';
+import { checkRegistryOnChain } from './checkRegistryOnChain';
 
 export function useIsInstitutionStatus() {
   const { address } = useAccount();
@@ -12,7 +12,7 @@ export function useIsInstitutionStatus() {
     if (!address) return;
     (async () => {
       try {
-        const res = await checkIsInstitution(address);
+        const res = await checkRegistryOnChain(address);
         setIsInstitution(res);
       } catch {
         setIsInstitution(false);

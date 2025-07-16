@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-interface ISBTRegistry {
+interface IISBTRegistry {
     function isRegisteredInstitution(address) external view returns (bool);
 }
 
@@ -16,7 +16,7 @@ contract InstitutionSBT is ERC721URIStorage, Ownable, EIP712 {
 
     /* ---------------- state ---------------- */
     uint256 public tokenIdCounter;
-    ISBTRegistry public immutable registry;
+    IISBTRegistry public immutable registry;
     mapping(bytes32 => bool) public consumed;
 
     bytes32 private constant CLAIM_TYPEHASH =
@@ -33,7 +33,7 @@ contract InstitutionSBT is ERC721URIStorage, Ownable, EIP712 {
         Ownable(initialOwner)
         EIP712(name_, "1")
     {
-        registry = ISBTRegistry(registry_);
+        registry = IISBTRegistry(registry_);
         require(registry.isRegisteredInstitution(initialOwner), "Owner not registered");
     }
 

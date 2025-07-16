@@ -4,10 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  LayoutGrid,
-  Users,
   CheckCircle,
-  Star,
   Trophy,
   Shield,
   HelpCircle,
@@ -21,16 +18,14 @@ import { useSocialWallet } from "@/lib/useSocialWallet";
 import { Menu, Transition } from "@headlessui/react";
 
 const menu = [
-  { href: "/dashboard", label: "Discover", icon: LayoutGrid },
-  { href: "/dashboard/events", label: "Event Public", icon: Users },
+  { href: "/dashboard", label: "Profile", icon: User },
   {
-    href: "/dashboard/events/verified",
-    label: "Event Verified",
+    href: "/dashboard/verify/",
+    label: "verify",
     icon: CheckCircle,
   },
-  { href: "/dashboard/reward", label: "Reward", icon: Star },
-  { href: "/dashboard/achievement", label: "Achievement", icon: Trophy },
-  { href: "/dashboard/verify", label: "Verify Status", icon: Shield },
+  { href: "/dashboard/Institution", label: "Event", icon: Trophy },
+  { href: "/dashboard/admin", label: "admin", icon: Shield },
   { href: "/dashboard/support", label: "Support", icon: HelpCircle },
 ];
 
@@ -173,16 +168,6 @@ export default function SideNav() {
           </ul>
         </div>
       </aside>
-
-      {/* ── Page Offset ───────────────────────────────────────────── */}
-      <div className="pt-16 sm:ml-64">
-        {/* content dari halaman akan dimasukkan lewat slot/children nantinya */}
-        <div className="p-4 border-2 border-dashed rounded-lg dark:border-zinc-700">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            Main Content Goes Here
-          </div>
-        </div>
-      </div>
     </>
   );
 }

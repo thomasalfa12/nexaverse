@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useSiweLogin } from "@/lib/useSiweLogin"; // ⬅️ SIWE hook
 import { useSocialWallet } from "@/lib/useSocialWallet"; // ⬅️ Google/Web3Auth
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import SocialLoginButton from "@/components/SocialLoginButton";
-import DarkModeToggle from "@/components/DarkModeToggle";
+import SocialLoginButton from "@/components/ui/SocialLoginButton";
+import DarkModeToggle from "@/components/ui/DarkModeToggle";
 
 export default function Home() {
   /* ---------- auth hooks ---------- */

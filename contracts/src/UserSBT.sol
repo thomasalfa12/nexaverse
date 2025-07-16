@@ -5,13 +5,13 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-interface ISBTRegistry {
+interface IISBTRegistry {
     function isRegisteredInstitution(address) external view returns (bool);
 }
 
 contract UserSBT is ERC721URIStorage, Ownable, Pausable {
     uint256 public tokenIdCounter;
-    ISBTRegistry public immutable registry;
+    IISBTRegistry public immutable registry;
 
     struct SBTData { address issuer; uint256 expiry; } // 0 = permanen
     mapping(address => uint256) public ownedToken;     // user → tokenId
@@ -29,7 +29,7 @@ contract UserSBT is ERC721URIStorage, Ownable, Pausable {
         string memory symbol_,
         address owner_
     ) ERC721(name_, symbol_) Ownable(owner_) {
-        registry = ISBTRegistry(registryAddr);
+        registry = IISBTRegistry(registryAddr);
     }
 
     modifier onlyInstitution() {

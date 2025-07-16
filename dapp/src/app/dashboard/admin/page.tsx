@@ -1,100 +1,178 @@
+// src/app/dashboard/admin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAccount, useSignTypedData, useWalletClient } from "wagmi";
-import { buildSbtSignatureArgs } from "@/utils/sbtSignature";
+import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { contracts } from "@/lib/contracts";
+import { checkRegistryOnChain } from "@/lib/checkRegistryOnChain";
+import { InstitutionRequest } from "@/utils/institution";
+import AdminLayout from "@/components/admin/AdminLayout";
+import RequestTable from "@/components/admin/RequestTable";
+import InstitutionTable from "@/components/admin/InstitutionTable";
+import InstitutionStats from "@/components/admin/InstitutionStats";
+import RequestSBTTable from "@/components/admin/RequestSBTTable";
 
-interface RequestItem {
-  tokenId: number;
+interface SBTRequest {
+  tokenId: string;
   to: string;
   uri: string;
-  deadline: number;
+  deadline: string;
 }
 
-export default function AdminDashboard() {
-  const [requests, setRequests] = useState<RequestItem[]>([]);
+export default function AdminPage() {
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const { signTypedDataAsync } = useSignTypedData();
+  const { data: owner } = useReadContract({
+    address: contracts.registry.address,
+    abi: contracts.registry.abi,
+    functionName: "owner",
+  });
+  const { writeContractAsync } = useWriteContract();
+
+  const [requests, setRequests] = useState<InstitutionRequest[]>([]);
+  const [registeredList, setRegisteredList] = useState<InstitutionRequest[]>(
+    []
+  );
+  const [sbtRequests, setSbtRequests] = useState<SBTRequest[]>([]);
+  const [signedIds, setSignedIds] = useState<bigint[]>([]);
+
+  const isAdmin =
+    typeof owner === "string" &&
+    typeof address === "string" &&
+    owner.toLowerCase() === address.toLowerCase();
 
   useEffect(() => {
-    fetch("/api/admin/requests")
-      .then((res) => res.json())
-      .then(setRequests);
+    if (!isConnected || !isAdmin) return;
+    fetchInstitutionRequests();
+  }, [isConnected, isAdmin]);
+
+  const fetchInstitutionRequests = async () => {
+    try {
+      const res = await fetch("/api/admin/institution");
+      const data = await res.json();
+      setRequests(data);
+    } catch (err) {
+      console.error("[fetchInstitutionRequests]", err);
+    }
+  };
+
+  useEffect(() => {
+    if (requests.length === 0) return;
+    fetchRegisteredInstitutions();
+  }, [requests]);
+
+  const fetchRegisteredInstitutions = async () => {
+    try {
+      const results = await Promise.all(
+        requests.map(async (req) => {
+          try {
+            const isReg = await checkRegistryOnChain(req.walletAddress);
+            return isReg ? req : null;
+          } catch (err) {
+            console.warn("[checkRegistryOnChain]", err);
+            return null;
+          }
+        })
+      );
+      const filtered = results.filter(Boolean) as InstitutionRequest[];
+      setRegisteredList(filtered);
+    } catch (err) {
+      console.error("[fetchRegisteredInstitutions]", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSBTData();
   }, []);
 
-  async function handleSign(req: RequestItem) {
-    const { tokenId, to, uri, deadline } = req;
+  const fetchSBTData = async () => {
     try {
-      if (!walletClient || !address || !isConnected) {
-        return alert("🔌 Wallet belum terhubung!");
-      }
+      const [reqRes, sigRes] = await Promise.all([
+        fetch("/api/admin/requests"),
+        fetch("/api/admin/signed"),
+      ]);
 
-      const { domain, types, message, primaryType } =
-        await buildSbtSignatureArgs({
-          walletClient,
-          verifyingContract: contracts.institution.address,
-          tokenId,
-          to,
-          uri,
-          deadline,
-        });
+      const reqs: SBTRequest[] = await reqRes.json();
+      const sigsRaw = await sigRes.json();
 
-      const signature = await signTypedDataAsync({
-        domain,
-        types,
-        primaryType,
-        message,
-      });
-
-      await fetch("/api/admin/signed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...message, signature }),
-      });
-
-      alert("✅ Signature berhasil dibuat & disimpan!");
+      const sigs = Array.isArray(sigsRaw) ? sigsRaw : [];
+      setSbtRequests(reqs);
+      setSignedIds(sigs.map((s) => BigInt(s.tokenId)));
     } catch (err) {
-      console.error("❌ Gagal sign:", err);
-      alert("Terjadi error saat signing. Lihat console.");
+      console.error("[fetchSBTData]", err);
     }
+  };
+
+  const handleRegister = async (institution: InstitutionRequest) => {
+    try {
+      await writeContractAsync({
+        address: contracts.registry.address,
+        abi: contracts.registry.abi,
+        functionName: "registerInstitution",
+        args: [
+          institution.walletAddress,
+          institution.name,
+          institution.officialWebsite,
+          institution.contactEmail,
+          institution.institutionType,
+        ],
+      });
+      alert("✅ Institusi berhasil didaftarkan ke registry on-chain");
+      fetchInstitutionRequests();
+    } catch (err) {
+      console.error("[registerInstitution]", err);
+      alert("❌ Gagal mendaftarkan institusi.");
+    }
+  };
+
+  const handleSignedUpdate = (tokenId: string) => {
+    setSignedIds((prev) => [...prev, BigInt(tokenId)]);
+  };
+
+  const pendingRequests = requests.filter(
+    (r) => !registeredList.some((reg) => reg.walletAddress === r.walletAddress)
+  );
+
+  if (!isConnected) {
+    return <div className="p-4">Harap hubungkan wallet terlebih dahulu.</div>;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 text-red-600">
+        🚫 Akses ditolak. Hanya admin (owner) yang dapat mengakses halaman ini.
+      </div>
+    );
   }
 
   return (
-    <section className="p-6">
-      <h2 className="text-xl font-bold mb-4">Pending Institution Requests</h2>
-      <table className="w-full border text-sm">
-        <thead>
-          <tr className="bg-gray-100 dark:bg-zinc-800">
-            <th className="p-2 text-left">Token ID</th>
-            <th className="p-2 text-left">To</th>
-            <th className="p-2 text-left">URI</th>
-            <th className="p-2 text-left">Deadline</th>
-            <th className="p-2 text-left">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((req) => (
-            <tr key={req.tokenId}>
-              <td className="p-2">{req.tokenId}</td>
-              <td className="p-2">{req.to}</td>
-              <td className="p-2">{req.uri}</td>
-              <td className="p-2">
-                {new Date(req.deadline * 1000).toLocaleString()}
-              </td>
-              <td className="p-2">
-                <button
-                  onClick={() => handleSign(req)}
-                  className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700"
-                >
-                  Sign
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+    <AdminLayout>
+      <section>
+        <h1 className="text-xl font-bold mb-4">
+          📩 Permintaan Pendaftaran Institusi
+        </h1>
+        <RequestTable requests={pendingRequests} onRegister={handleRegister} />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-2">✅ Institusi Terdaftar</h2>
+        <InstitutionTable data={registeredList} />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-2">
+          🖊️ Permintaan Signature SBT
+        </h2>
+        <RequestSBTTable
+          requests={sbtRequests}
+          signed={signedIds}
+          onSigned={handleSignedUpdate}
+        />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-2">📊 Statistik Institusi</h2>
+        <InstitutionStats data={registeredList} />
+      </section>
+    </AdminLayout>
   );
 }

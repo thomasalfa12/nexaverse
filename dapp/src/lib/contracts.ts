@@ -1,6 +1,6 @@
 import { abi as userAbi } from "../../public/artifacts/src/UserSBT.sol/UserSBT.json";
 import { abi as instAbi } from "../../public/artifacts/src/InstitutionSBT.sol/InstitutionSBT.json";
-import { abi as regAbi }  from "../../public/artifacts/src/mock/MockRegistry.sol/MockRegistry.json";
+import { abi as regAbi }  from "../../public/artifacts/src/ISBTRegistry.sol/ISBTRegistry.json";
 
 export const contracts = {
   user: {

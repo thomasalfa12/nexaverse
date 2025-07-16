@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `SBTRequest` MODIFY `uri` VARCHAR(2048) NOT NULL;
+
+-- AlterTable
+ALTER TABLE `SBTSignature` MODIFY `uri` VARCHAR(2048) NOT NULL;
