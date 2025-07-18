@@ -1,0 +1,78 @@
+// src/components/verify/RequestMintForm.tsx
+"use client";
+
+import { useTransition } from "react";
+import { useAccount, useWriteContract } from "wagmi";
+import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { contracts } from "@/lib/contracts";
+
+export function RequestMintForm({ onSuccess }: { onSuccess?: () => void }) {
+  const { address } = useAccount();
+  const [isPending, startTransition] = useTransition();
+  const { writeContractAsync } = useWriteContract();
+
+  const handleSubmit = () => {
+    if (!address) {
+      toast.error("Wallet belum terhubung.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        // 1. Write to blockchain (requestMint with empty URI)
+        await writeContractAsync({
+          address: contracts.institution.address,
+          abi: contracts.institution.abi,
+          functionName: "requestMint",
+          args: [], // Admin akan isi URI nanti
+        });
+
+        // 2. Simpan ke database
+        const res = await fetch("/api/request/mint", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || "Gagal menyimpan permintaan ke DB");
+        }
+
+        toast.success("Permintaan mint berhasil dikirim!");
+        onSuccess?.();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (err: any) {
+        console.error("Mint request error", err);
+        toast.error(
+          err.message || "Terjadi kesalahan saat mengajukan permintaan."
+        );
+      }
+    });
+  };
+
+  return (
+    <Card className="">
+      <CardContent className="pt-6 space-y-4">
+        <div className="grid gap-2">
+          <Label>Wallet</Label>
+          <p className="text-muted-foreground">
+            {address || "Belum terhubung"}
+          </p>
+        </div>
+
+        <Button onClick={handleSubmit} disabled={isPending || !address}>
+          {isPending ? "Mengirim..." : "Ajukan Permintaan Mint SBT"}
+        </Button>
+
+        <p className="text-sm text-muted-foreground">
+          Setelah dikirim, admin akan menyetujui permintaan Anda sebelum Anda
+          bisa mengklaim token.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}

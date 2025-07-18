@@ -1,0 +1,177 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  CheckCircle,
+  Trophy,
+  Shield,
+  HelpCircle,
+  User,
+  LogOut,
+  MenuIcon,
+} from "lucide-react";
+import { useAccount, useDisconnect } from "wagmi";
+import { useSocialWallet } from "@/lib/useSocialWallet";
+
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+const menu = [
+  { href: "/dashboard", label: "Profile", icon: User },
+  { href: "/dashboard/verify", label: "Verify", icon: CheckCircle },
+  { href: "/dashboard/Institution", label: "Event", icon: Trophy },
+  { href: "/dashboard/admin", label: "Admin", icon: Shield },
+  { href: "/dashboard/support", label: "Support", icon: HelpCircle },
+];
+
+export default function SideNav() {
+  const router = useRouter();
+
+  const {
+    isLoggedIn: isSocial,
+    address: socialAddr,
+    logout: socialLogout,
+  } = useSocialWallet();
+  const { address: walletAddr, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+
+  const loggedIn = isSocial || isConnected;
+  const addr = socialAddr ?? walletAddr;
+
+  const handleLogout = async () => {
+    await fetch("/api/siwe/logout", { method: "POST" }).catch(() => {});
+    if (isSocial) await socialLogout();
+    else if (isConnected) disconnect();
+    router.replace("/");
+  };
+
+  return (
+    <>
+      {/* ── Navbar ─────────────────────────────── */}
+      <nav className="fixed top-0 z-50 w-full border-b bg-background/80 backdrop-blur">
+        <div className="flex h-16 items-center justify-between px-4 sm:px-6">
+          {/* Sidebar toggle */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="sm:hidden">
+                <MenuIcon className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <SideNavContent />
+            </SheetContent>
+          </Sheet>
+
+          {/* Branding */}
+          <h1 className="text-xl font-semibold tracking-tight">Nexaverse</h1>
+
+          {/* Account / Login */}
+          {loggedIn ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex gap-2 items-center"
+                >
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback>
+                      {addr?.slice(2, 4).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:block text-xs font-mono">
+                    {addr?.slice(0, 6)}...{addr?.slice(-4)}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => router.push("/dashboard/profile")}
+                >
+                  <User className="mr-2 h-4 w-4" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" /> Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/login")}
+            >
+              <User className="mr-2 h-4 w-4" /> Sign In
+            </Button>
+          )}
+        </div>
+      </nav>
+
+      {/* ── Sidebar (Desktop) ─────────────────── */}
+      <aside className="fixed top-0 left-0 z-40 hidden h-screen w-64 flex-col border-r bg-background pt-16 sm:flex">
+        <SideNavContent />
+      </aside>
+    </>
+  );
+}
+
+function SideNavContent() {
+  const pathname = usePathname();
+
+  return (
+    <TooltipProvider>
+      <ScrollArea className="h-full px-3 py-4">
+        <ul className="space-y-1">
+          {menu.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href;
+            return (
+              <li key={href}>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+                        isActive && "bg-muted"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span>{label}</span>
+
+                      {label === "Admin" && (
+                        <Badge
+                          variant="secondary"
+                          className="ml-auto text-[10px]"
+                        >
+                          Beta
+                        </Badge>
+                      )}
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{label}</TooltipContent>
+                </Tooltip>
+              </li>
+            );
+          })}
+        </ul>
+      </ScrollArea>
+    </TooltipProvider>
+  );
+}

@@ -1,0 +1,159 @@
+"use client";
+
+import { useEffect, useState, useTransition, FormEvent } from "react";
+import { useAccount } from "wagmi";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, Sparkles } from "lucide-react";
+
+type Props = {
+  onSuccess?: () => void;
+};
+
+export default function RegisterForm({ onSuccess }: Props) {
+  const { address } = useAccount();
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    website: "",
+    type: "",
+  });
+  const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const check = async () => {
+      if (!address) return;
+      try {
+        const res = await fetch(`/api/institution/check?wallet=${address}`);
+        const data = await res.json();
+        setIsAlreadyRegistered(data.registered);
+        setSubmitted(data.submitted ?? false);
+      } catch (err) {
+        console.error("Gagal fetch status institusi", err);
+      }
+    };
+    check();
+  }, [address]);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!address) return toast.error("Wallet belum terhubung");
+
+    startTransition(async () => {
+      const payload = {
+        name: form.name,
+        officialWebsite: form.website,
+        contactEmail: form.email,
+        walletAddress: address,
+        institutionType: parseInt(form.type),
+      };
+
+      try {
+        const res = await fetch("/api/admin/register-institution", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          toast.success("Institusi berhasil didaftarkan.");
+          setSubmitted(true);
+          onSuccess?.();
+        } else {
+          const error = await res.json();
+          toast.error(error?.error || "Gagal mendaftarkan institusi.");
+        }
+      } catch (err) {
+        toast.error("Terjadi kesalahan saat submit.");
+        console.error(err);
+      }
+    });
+  };
+
+  if (!address)
+    return (
+      <p className="text-sm text-muted-foreground">
+        🔌 Silakan hubungkan wallet Anda terlebih dahulu.
+      </p>
+    );
+
+  if (isAlreadyRegistered)
+    return (
+      <p className="text-sm text-green-600">
+        ✅ Anda sudah terdaftar sebagai institusi.
+      </p>
+    );
+
+  return (
+    <Card className="w-full max-w-md border-dashed border-2 border-gray-300 animate-fade-in">
+      <CardContent className="p-6">
+        {submitted ? (
+          <div className="flex flex-col items-center gap-4 animate-pulse">
+            <Sparkles className="text-yellow-500 animate-bounce" size={32} />
+            <p className="text-sm text-yellow-800 text-center">
+              ⏳ Data berhasil dikirim.
+              <br />
+              Silakan tunggu admin melakukan verifikasi dan pendaftaran
+              on-chain.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Input
+              name="name"
+              placeholder="Nama Institusi"
+              value={form.name}
+              onChange={handleChange}
+              required
+            />
+            <Input
+              name="website"
+              placeholder="Website Resmi"
+              value={form.website}
+              onChange={handleChange}
+              required
+            />
+            <Input
+              name="email"
+              type="email"
+              placeholder="Email Kontak"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+            <select
+              name="type"
+              className="border p-2 rounded-md text-sm text-gray-700"
+              value={form.type}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Pilih Jenis Institusi</option>
+              <option value="1">Universitas</option>
+              <option value="2">Sekolah</option>
+              <option value="3">Perusahaan</option>
+              <option value="4">Organisasi</option>
+              <option value="5">Lainnya</option>
+            </select>
+
+            <Button type="submit" disabled={isPending} className="w-full">
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Kirim Pendaftaran
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

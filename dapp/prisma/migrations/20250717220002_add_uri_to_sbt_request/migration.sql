@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `SBTRequest` ADD COLUMN `uri` VARCHAR(191) NULL;

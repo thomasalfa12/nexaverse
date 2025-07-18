@@ -1,69 +1,68 @@
 import { ethers, network } from "hardhat";
 import fs from "fs";
+import path from "path";
 
-// Nama file output untuk menyimpan alamat kontrak
-const OUTPUT_FILE = "./deploy.json";
+const OUTPUT_FILE = path.resolve(__dirname, "../deploy.json");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
+
   console.log(`➡︎ Deployer Address: ${deployer.address}`);
   console.log(`➡︎ Deploying to network: ${network.name}`);
   console.log("----------------------------------------------------");
 
   // 1. Deploy ISBTRegistry
-  // Kita deploy kontrak registry asli dan menjadikan 'deployer' sebagai pemilik (owner) awal.
   console.log("⚙️ Deploying ISBTRegistry...");
-  const registry = await ethers.deployContract("ISBTRegistry", [deployer.address]);
+  const RegistryFactory = await ethers.getContractFactory("ISBTRegistry");
+  const registry = await RegistryFactory.deploy(deployer.address);
   await registry.waitForDeployment();
   const registryAddress = await registry.getAddress();
-  console.log(`✅ ISBTRegistry deployed to: ${registryAddress}`);
+  console.log(`✅ ISBTRegistry deployed at: ${registryAddress}`);
 
-  // 2. Mendaftarkan institusi deployer ke dalam registry
-  // Karena deployer adalah owner, ia bisa langsung mendaftarkan institusinya sendiri.
-  // Siapkan data institusi untuk pendaftaran.
+  // 2. Register Deployer as an Institution
   const institutionName = "Universitas Nexa (Demo)";
   const institutionWebsite = "https://nexa.edu";
   const institutionEmail = "admin@nexa.edu";
-  const institutionType = 1; // 1 = UNIVERSITAS, sesuai enum di ISBTRegistry.sol
+  const institutionType = 1; // UNIVERSITAS
 
-  console.log(`\n⚙️ Registering '${institutionName}' for address ${deployer.address}...`);
-  const tx = await registry.registerInstitution(
+  console.log(`\n🏫 Registering institution '${institutionName}'...`);
+  const registerTx = await registry.registerInstitution(
     deployer.address,
     institutionName,
     institutionWebsite,
     institutionEmail,
     institutionType
   );
-  await tx.wait(); // Tunggu hingga transaksi pendaftaran selesai
-  console.log("✅ Institution registered successfully!");
+  await registerTx.wait();
+  console.log("✅ Institution registered!");
 
   // 3. Deploy InstitutionSBT
-  // Kontrak SBT ini menggunakan alamat registry asli yang baru saja kita deploy.
-  // Pemilik awal kontrak SBT ini adalah deployer, yang sudah kita daftarkan di registry.
-  console.log("\n⚙️ Deploying InstitutionSBT...");
-  const sbt = await ethers.deployContract("InstitutionSBT", [
+  console.log("\n🎓 Deploying InstitutionSBT...");
+  const SBTFactory = await ethers.getContractFactory("InstitutionSBT");
+  const sbt = await SBTFactory.deploy(
     registryAddress,
     "Nexa Degree – Demo",
     "DEMO-ISBT",
-    deployer.address,
-  ]);
+    deployer.address
+  );
   await sbt.waitForDeployment();
   const sbtAddress = await sbt.getAddress();
-  console.log(`✅ InstitutionSBT deployed to: ${sbtAddress}`);
+  console.log(`✅ InstitutionSBT deployed at: ${sbtAddress}`);
 
-  // 4. Simpan alamat ke file JSON
+  // 4. Save addresses to deploy.json
+  const output = {
+    ISBTRegistry: registryAddress,
+    InstitutionSBT: sbtAddress,
+    network: network.name,
+    deployedAt: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(output, null, 2));
   console.log("----------------------------------------------------");
-  fs.writeFileSync(
-    OUTPUT_FILE,
-    JSON.stringify({ 
-      ISBTRegistry: registryAddress, 
-      InstitutionSBT: sbtAddress 
-    }, null, 2)
-  );
-  console.log(`📄 Deployment addresses saved to: ${OUTPUT_FILE}`);
+  console.log(`📄 Deployment saved to: ${OUTPUT_FILE}`);
 }
 
-main().catch((e) => {
-  console.error("❌ Deployment failed:", e);
+main().catch((err) => {
+  console.error("❌ Deployment failed:", err);
   process.exit(1);
 });

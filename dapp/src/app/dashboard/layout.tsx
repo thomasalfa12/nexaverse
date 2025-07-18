@@ -1,13 +1,16 @@
-import type { ReactNode } from "react";
+// app/dashboard/layout.tsx (UPDATED)
 import SideNav from "@/components/SideNav";
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <SideNav />
-      <div className="pt-16 sm:ml-64">
-        <div className="p-4 max-w-4xl mx-auto">{children}</div>
-      </div>
-    </>
-  );
+// Providers dan metadata bisa Anda pindahkan ke root layout di app/layout.tsx
+// agar tidak perlu di-import berulang kali di setiap sub-layout.
+// Namun, jika ini khusus untuk dashboard, biarkan saja.
+
+export default function DashboardAreaLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Komponen SideNav sekarang membungkus semua halaman di dalam /dashboard
+  // dan menyediakan sidebar, header, serta area konten utama.
+  return <SideNav>{children}</SideNav>;
 }

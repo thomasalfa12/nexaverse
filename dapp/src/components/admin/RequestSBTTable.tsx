@@ -1,123 +1,113 @@
+// src/components/admin/RequestSBTTable.tsx
+
 "use client";
 
-import { useState } from "react";
-import { useSignTypedData } from "wagmi";
-import { SBTRequest } from "@/utils/sbt";
-import { toast } from "sonner";
-import { contracts } from "@/lib/contracts";
-import Button from "@/components/ui/Button";
+import { useTransition } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatAddress } from "@/utils/formatAdd";
 
-interface Props {
-  requests: SBTRequest[];
-  signed: bigint[];
-  onSigned?: (tokenId: string) => void;
+export interface SBTRequest {
+  to: string;
+  tokenId: string;
+  uri: string;
 }
 
-export default function RequestSBTTable({ requests, signed, onSigned }: Props) {
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const { signTypedDataAsync } = useSignTypedData();
+export default function RequestSBTTable({
+  requests,
+  approved,
+  onApprove,
+}: {
+  requests: SBTRequest[];
+  approved: string[];
+  onApprove: (req: SBTRequest) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
 
-  const handleSign = async (req: SBTRequest) => {
-    try {
-      setLoadingId(req.to);
-
-      const signature = await signTypedDataAsync({
-        domain: {
-          name: "InstitutionSBT",
-          version: "1",
-          chainId: 84532, // baseSepolia
-          verifyingContract: contracts.institution.address,
-        },
-        types: {
-          Claim: [
-            { name: "to", type: "address" },
-            { name: "tokenId", type: "uint256" },
-            { name: "uri", type: "string" },
-            { name: "deadline", type: "uint256" },
-          ],
-        },
-        primaryType: "Claim",
-        message: {
-          to: req.to as `0x${string}`,
-          tokenId: BigInt(req.tokenId),
-          uri: req.uri,
-          deadline: BigInt(req.deadline),
-        },
-      });
-
-      const payload = {
-        to: req.to,
-        tokenId: req.tokenId.toString(),
-        uri: req.uri,
-        deadline: req.deadline.toString(),
-        signature,
-      };
-
-      const res = await fetch("/api/admin/signed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Gagal menyimpan signature");
-      }
-
-      toast.success("✅ Signature berhasil disimpan");
-
-      // Update state
-      onSigned?.(req.tokenId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("[handleSign]", err);
-      toast.error("❌ Gagal menandatangani: " + err.message);
-    } finally {
-      setLoadingId(null);
-    }
+  const handleApproveClick = (req: SBTRequest) => {
+    startTransition(() => onApprove(req));
   };
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full text-sm text-left border">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Wallet</th>
-            <th className="px-3 py-2">Token ID</th>
-            <th className="px-3 py-2">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((r, i) => {
-            const isSigned = signed.includes(BigInt(r.tokenId));
-            return (
-              <tr key={i} className="border-t">
-                <td className="px-3 py-2">{i + 1}</td>
-                <td className="px-3 py-2 truncate max-w-[200px]">{r.to}</td>
-                <td className="px-3 py-2 truncate max-w-[300px]">
-                  {r.tokenId}
-                </td>
-                <td className="px-3 py-2">
-                  {isSigned ? (
-                    <span className="text-green-600 font-medium">
-                      ✅ Signed
-                    </span>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => handleSign(r)}
-                      disabled={loadingId === r.to}
-                    >
-                      {loadingId === r.to ? "Signing..." : "Tanda Tangan"}
-                    </Button>
-                  )}
-                </td>
+    <Card>
+      <CardContent className="p-4">
+        <h3 className="text-lg font-semibold mb-4">
+          Daftar Permintaan Mint SBT
+        </h3>
+
+        <div className="overflow-auto rounded border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 text-left">#</th>
+                <th className="px-4 py-2 text-left">Wallet</th>
+                <th className="px-4 py-2 text-left">Token ID</th>
+                <th className="px-4 py-2 text-left">URI</th>
+                <th className="px-4 py-2 text-left">Status</th>
+                <th className="px-4 py-2 text-left">Aksi</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            </thead>
+            <tbody>
+              {requests.map((req, i) => {
+                const isApproved = approved.includes(req.to.toLowerCase());
+                return (
+                  <tr key={`${req.to}-${req.tokenId}`} className="border-t">
+                    <td className="px-4 py-2">{i + 1}</td>
+                    <td className="px-4 py-2">{formatAddress(req.to)}</td>
+                    <td className="px-4 py-2">{req.tokenId}</td>
+                    <td className="px-4 py-2 truncate max-w-[200px]">
+                      {req.uri ? (
+                        <a
+                          href={req.uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          {req.uri.slice(0, 30)}...
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground italic">
+                          Belum ada URI
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-2">
+                      {isApproved ? (
+                        <Badge variant="success">Disetujui</Badge>
+                      ) : (
+                        <Badge variant="warning">Menunggu</Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {!isApproved && (
+                        <Button
+                          size="sm"
+                          disabled={isPending}
+                          onClick={() => handleApproveClick(req)}
+                        >
+                          {isPending ? "Memproses..." : "Setujui"}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {requests.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-6 text-center text-muted-foreground"
+                  >
+                    Tidak ada permintaan mint yang ditemukan.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

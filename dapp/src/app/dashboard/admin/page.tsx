@@ -1,39 +1,33 @@
-// src/app/dashboard/admin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { contracts } from "@/lib/contracts";
-import { checkRegistryOnChain } from "@/lib/checkRegistryOnChain";
-import { InstitutionRequest } from "@/utils/institution";
+import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import RequestTable from "@/components/admin/RequestTable";
 import InstitutionTable from "@/components/admin/InstitutionTable";
 import InstitutionStats from "@/components/admin/InstitutionStats";
 import RequestSBTTable from "@/components/admin/RequestSBTTable";
-
-interface SBTRequest {
-  tokenId: string;
-  to: string;
-  uri: string;
-  deadline: string;
-}
+import type { InstitutionRequest, InstitutionList } from "@/utils/institution";
+import type { SBTRequest } from "@/components/admin/RequestSBTTable";
+import { toast } from "sonner";
 
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const router = useRouter();
+
   const { data: owner } = useReadContract({
     address: contracts.registry.address,
     abi: contracts.registry.abi,
     functionName: "owner",
   });
-  const { writeContractAsync } = useWriteContract();
 
   const [requests, setRequests] = useState<InstitutionRequest[]>([]);
-  const [registeredList, setRegisteredList] = useState<InstitutionRequest[]>(
-    []
-  );
+  const [registeredList, setRegisteredList] = useState<InstitutionList[]>([]);
   const [sbtRequests, setSbtRequests] = useState<SBTRequest[]>([]);
-  const [signedIds, setSignedIds] = useState<bigint[]>([]);
+  const [approvedAddresses, setApprovedAddresses] = useState<string[]>([]);
 
   const isAdmin =
     typeof owner === "string" &&
@@ -42,63 +36,52 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isConnected || !isAdmin) return;
-    fetchInstitutionRequests();
+    fetchInstitutionData();
+    fetchSBTRequests();
   }, [isConnected, isAdmin]);
 
-  const fetchInstitutionRequests = async () => {
+  const fetchInstitutionData = async () => {
     try {
-      const res = await fetch("/api/admin/institution");
-      const data = await res.json();
-      setRequests(data);
-    } catch (err) {
-      console.error("[fetchInstitutionRequests]", err);
-    }
-  };
-
-  useEffect(() => {
-    if (requests.length === 0) return;
-    fetchRegisteredInstitutions();
-  }, [requests]);
-
-  const fetchRegisteredInstitutions = async () => {
-    try {
-      const results = await Promise.all(
-        requests.map(async (req) => {
-          try {
-            const isReg = await checkRegistryOnChain(req.walletAddress);
-            return isReg ? req : null;
-          } catch (err) {
-            console.warn("[checkRegistryOnChain]", err);
-            return null;
-          }
-        })
-      );
-      const filtered = results.filter(Boolean) as InstitutionRequest[];
-      setRegisteredList(filtered);
-    } catch (err) {
-      console.error("[fetchRegisteredInstitutions]", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchSBTData();
-  }, []);
-
-  const fetchSBTData = async () => {
-    try {
-      const [reqRes, sigRes] = await Promise.all([
-        fetch("/api/admin/requests"),
-        fetch("/api/admin/signed"),
+      const [resPending, resRegistered] = await Promise.all([
+        fetch("/api/admin/register-institution"),
+        fetch("/api/admin/registered"),
       ]);
 
-      const reqs: SBTRequest[] = await reqRes.json();
-      const sigsRaw = await sigRes.json();
+      const [pending, registered] = await Promise.all([
+        resPending.json(),
+        resRegistered.json(),
+      ]);
 
-      const sigs = Array.isArray(sigsRaw) ? sigsRaw : [];
-      setSbtRequests(reqs);
-      setSignedIds(sigs.map((s) => BigInt(s.tokenId)));
+      setRequests(pending);
+      setRegisteredList(registered); // Should be InstitutionList[]
     } catch (err) {
-      console.error("[fetchSBTData]", err);
+      console.error("[fetchInstitutionData]", err);
+      toast.error("Gagal memuat data institusi.");
+    }
+  };
+
+  const fetchSBTRequests = async () => {
+    try {
+      const res = await fetch("/api/admin/mint-request");
+      const approvedRes = await fetch("/api/admin/signed");
+
+      const dbRequests: { id: number; Address: string; uri?: string }[] =
+        await res.json();
+
+      const approvedData: { address: string }[] = await approvedRes.json();
+      const approved = approvedData.map((d) => d.address.toLowerCase());
+
+      const requests: SBTRequest[] = dbRequests.map((item) => ({
+        to: item.Address,
+        tokenId: item.id.toString(),
+        uri: item.uri ?? "",
+      }));
+
+      setSbtRequests(requests);
+      setApprovedAddresses(approved);
+    } catch (err) {
+      console.error("[fetchSBTRequests]", err);
+      toast.error("Gagal memuat data mint request.");
     }
   };
 
@@ -116,16 +99,48 @@ export default function AdminPage() {
           institution.institutionType,
         ],
       });
-      alert("✅ Institusi berhasil didaftarkan ke registry on-chain");
-      fetchInstitutionRequests();
+
+      toast.success("✅ Institusi berhasil didaftarkan ke registry");
+      await fetchInstitutionData();
     } catch (err) {
-      console.error("[registerInstitution]", err);
-      alert("❌ Gagal mendaftarkan institusi.");
+      console.error("[handleRegister]", err);
+      toast.error("❌ Gagal mendaftarkan institusi.");
     }
   };
 
-  const handleSignedUpdate = (tokenId: string) => {
-    setSignedIds((prev) => [...prev, BigInt(tokenId)]);
+  const handleApprove = async (req: SBTRequest) => {
+    const tokenId = req.tokenId;
+    const uri = prompt("Masukkan URI metadata (ipfs://...)", req.uri || "");
+
+    if (!uri) {
+      toast.error("URI tidak boleh kosong.");
+      return;
+    }
+
+    try {
+      await writeContractAsync({
+        address: contracts.institution.address,
+        abi: contracts.institution.abi,
+        functionName: "approveMintRequest",
+        args: [req.to, uri],
+      });
+
+      const res = await fetch("/api/admin/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: req.to, tokenId, uri }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal simpan approval ke DB");
+      }
+
+      toast.success("✅ Berhasil menyetujui mint SBT");
+      router.refresh();
+    } catch (err) {
+      console.error("[handleApprove]", err);
+      toast.error("❌ Gagal menyetujui mint.");
+    }
   };
 
   const pendingRequests = requests.filter(
@@ -133,7 +148,11 @@ export default function AdminPage() {
   );
 
   if (!isConnected) {
-    return <div className="p-4">Harap hubungkan wallet terlebih dahulu.</div>;
+    return (
+      <div className="p-4 text-muted-foreground">
+        Harap hubungkan wallet terlebih dahulu.
+      </div>
+    );
   }
 
   if (!isAdmin) {
@@ -146,26 +165,24 @@ export default function AdminPage() {
 
   return (
     <AdminLayout>
-      <section>
+      <section className="mb-10">
         <h1 className="text-xl font-bold mb-4">
           📩 Permintaan Pendaftaran Institusi
         </h1>
         <RequestTable requests={pendingRequests} onRegister={handleRegister} />
       </section>
 
-      <section>
+      <section className="mb-10">
         <h2 className="text-lg font-semibold mb-2">✅ Institusi Terdaftar</h2>
         <InstitutionTable data={registeredList} />
       </section>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-2">
-          🖊️ Permintaan Signature SBT
-        </h2>
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-2">🖊️ Permintaan Mint SBT</h2>
         <RequestSBTTable
           requests={sbtRequests}
-          signed={signedIds}
-          onSigned={handleSignedUpdate}
+          approved={approvedAddresses}
+          onApprove={handleApprove}
         />
       </section>
 

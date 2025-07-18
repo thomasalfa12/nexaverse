@@ -17,24 +17,29 @@ model InstitutionRequest {
   walletAddress    String   @unique
   createdAt        DateTime @default(now())
 }
+model InstitutionList {
+  id               Int      @id @default(autoincrement())
+  name             String
+  officialWebsite  String
+  contactEmail     String
+  institutionType  Int
+  walletAddress    String   @unique
+  createdAt        DateTime @default(now())
+}
 
 model SBTRequest {
-  id        Int    @id @default(autoincrement())
-  to        String @db.Char(42)
-  tokenId   String @unique
-  uri       String @db.VarChar(2048)
-  deadline  BigInt @db.BigInt
+  id        String   @id @default(cuid())
+  Address   String   @unique
+  uri       String?
+  approved  Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 
+model SBTApproval {
+  id              String   @id @default(cuid())
+  address         String   @unique
+  tokenId         Int   // <- ini id row atau ID internal kamu
+  uri             String
+  createdAt       DateTime @default(now())
 
-model SBTSignature {
-  id        Int      @id @default(autoincrement())
-  to        String   @db.Char(42)
-  tokenId   String   @unique 
-  uri       String   @db.VarChar(2048)
-  deadline  BigInt   @db.BigInt
-  signature String   @db.Text
-  createdAt DateTime @default(now())
 }
-
