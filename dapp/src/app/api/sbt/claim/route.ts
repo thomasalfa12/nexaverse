@@ -1,6 +1,6 @@
 import { writeContract, getWalletClient } from "@wagmi/core";
 import { contracts } from "@/lib/contracts";
-import { wagmiConfig } from "@/lib/wallet";
+import { wagmiConfig } from "@/lib/walletProviders/wallet";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {

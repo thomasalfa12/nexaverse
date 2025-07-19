@@ -1,17 +1,23 @@
-// src/components/SideNav.tsx (FIXED)
+// src/components/SideNav.tsx
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
-import { useSocialWallet } from "@/lib/useSocialWallet";
+import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 // --- UI Components ---
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,12 +27,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator"; // <-- Pastikan import ini ada
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
-  TooltipContent,
   TooltipProvider,
+  TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -35,49 +40,77 @@ import {
   CheckCircle,
   HelpCircle,
   LogOut,
-  LogIn, // <-- FIXED: Menambahkan LogIn yang hilang
+  LogIn,
   Menu,
   PanelLeftClose,
   PanelRightClose,
   Shield,
   Trophy,
   User,
+  ChevronRight,
+  Building,
+  Home,
 } from "lucide-react";
 
-// --- Menu Configuration ---
-const primaryMenu = [
+// ============================================================================
+// --- KONFIGURASI MENU BARU (MENDUKUNG SUB-MENU) ---
+// ============================================================================
+export type NavItemConfig = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  isBeta?: boolean;
+  roles?: ("REGISTRY_ADMIN" | "INSTITUTION_ADMIN")[];
+  children?: NavItemConfig[];
+};
+
+const menuConfig: NavItemConfig[] = [
   { href: "/dashboard", label: "Profile", icon: User },
   { href: "/dashboard/verify", label: "Verify", icon: CheckCircle },
   { href: "/dashboard/event", label: "Event", icon: Trophy },
-];
-
-const secondaryMenu = [
-  { href: "/dashboard/admin", label: "Admin", icon: Shield, isBeta: true },
+  {
+    href: "/dashboard/admin",
+    label: "Admin",
+    icon: Shield,
+    isBeta: true,
+    children: [
+      {
+        href: "/dashboard/admin/registry",
+        label: "Registry",
+        icon: Home,
+        roles: ["REGISTRY_ADMIN"],
+      },
+      {
+        href: "/dashboard/admin/institution",
+        label: "Institution",
+        icon: Building,
+        roles: ["INSTITUTION_ADMIN"],
+      },
+    ],
+  },
   { href: "/dashboard/support", label: "Support", icon: HelpCircle },
 ];
 
 // ============================================================================
 // --- Main Layout Component ---
-// Diganti namanya menjadi SideNav sesuai nama file Anda
 // ============================================================================
 export default function SideNav({ children }: { children: React.ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const pathname = usePathname();
 
-  // Mencari judul halaman berdasarkan path saat ini
-  const pageTitle =
-    [...primaryMenu, ...secondaryMenu].find(
-      (item) =>
-        pathname.startsWith(item.href) &&
-        (item.href === "/dashboard" ? pathname === item.href : true)
-    )?.label || "Dashboard";
+  const pathname = usePathname();
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setIsSidebarCollapsed(true);
+    }
+  }, [pathname]);
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full bg-gray-100 dark:bg-black">
       <TooltipProvider>
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 hidden h-full flex-col border-r bg-background transition-all duration-300 ease-in-out sm:flex",
+            "fixed inset-y-0 left-0 z-20 hidden h-full flex-col border-r transition-all duration-300 ease-in-out sm:flex",
+            "border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl",
             isSidebarCollapsed ? "w-20" : "w-64"
           )}
         >
@@ -94,38 +127,95 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
           isSidebarCollapsed ? "sm:pl-20" : "sm:pl-64"
         )}
       >
-        <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:justify-between">
+        {/* --- Header dengan Efek Kaca --- */}
+        {/* PERBAIKAN: Menghapus koma (`,`) yang menyebabkan error */}
+        <header
+          className={cn(
+            "sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b px-4 sm:px-6",
+            "border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl"
+          )}
+        >
           <div className="flex items-center gap-4">
             <div className="sm:hidden">
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon">
                     <Menu className="h-5 w-5" />
-                    <span className="sr-only">Toggle Menu</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
+                <SheetContent
+                  side="left"
+                  className="w-64 p-0 bg-background border-r"
+                >
                   <NavContent isCollapsed={false} />
                 </SheetContent>
               </Sheet>
             </div>
-            {/* Menampilkan judul halaman di header desktop */}
-            <h1 className="hidden text-xl font-semibold sm:block">
-              {pageTitle}
-            </h1>
+            <Breadcrumbs />
           </div>
           <UserMenu />
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 sm:p-6">{children}</div>
+        </main>
       </div>
     </div>
   );
 }
 
 // ============================================================================
-// --- Navigation Content (Used in Sidebar and Mobile Sheet) ---
+// --- Komponen-komponen Pendukung ---
 // ============================================================================
+
+function Breadcrumbs() {
+  const pathname = usePathname();
+  const segments = pathname.split("/").filter(Boolean);
+
+  const findLabel = (path: string): string | null => {
+    for (const item of menuConfig) {
+      if (item.href === path) return item.label;
+      if (item.children) {
+        for (const child of item.children) {
+          if (child.href === path) return child.label;
+        }
+      }
+    }
+    return null;
+  };
+
+  if (segments.length <= 1) {
+    return <h1 className="text-xl font-semibold">Profile</h1>;
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-sm sm:text-base">
+      {segments.map((segment, index) => {
+        const path = `/${segments.slice(0, index + 1).join("/")}`;
+        const label =
+          findLabel(path) || segment.charAt(0).toUpperCase() + segment.slice(1);
+        const isLast = index === segments.length - 1;
+
+        return (
+          <div key={path} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "font-semibold",
+                isLast ? "text-primary" : "text-muted-foreground"
+              )}
+            >
+              {label}
+            </span>
+            {!isLast && (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function NavContent({
   isCollapsed,
   onCollapse,
@@ -133,13 +223,11 @@ function NavContent({
   isCollapsed: boolean;
   onCollapse?: () => void;
 }) {
-  const pathname = usePathname();
-
   return (
     <div className="flex h-full flex-col">
       <div
         className={cn(
-          "flex h-16 items-center border-b px-4",
+          "flex h-16 items-center border-b border-white/10 px-4",
           isCollapsed ? "justify-center" : "justify-between"
         )}
       >
@@ -155,33 +243,13 @@ function NavContent({
             ) : (
               <PanelLeftClose className="h-5 w-5" />
             )}
-            <span className="sr-only">Toggle sidebar</span>
           </Button>
         )}
       </div>
-
       <ScrollArea className="flex-1 py-4">
         <nav className="grid items-start gap-1 px-3">
-          {primaryMenu.map((item) => (
-            <NavItem
-              key={item.href}
-              {...item}
-              isActive={pathname.startsWith(item.href)}
-              isCollapsed={isCollapsed}
-            />
-          ))}
-        </nav>
-        <div className="px-3">
-          <Separator className="my-4" />
-        </div>
-        <nav className="grid items-start gap-1 px-3">
-          {secondaryMenu.map((item) => (
-            <NavItem
-              key={item.href}
-              {...item}
-              isActive={pathname.startsWith(item.href)}
-              isCollapsed={isCollapsed}
-            />
+          {menuConfig.map((item) => (
+            <NavItem key={item.href} item={item} isCollapsed={isCollapsed} />
           ))}
         </nav>
       </ScrollArea>
@@ -189,29 +257,34 @@ function NavContent({
   );
 }
 
-// ============================================================================
-// --- Single Navigation Item ---
-// ============================================================================
 function NavItem({
-  href,
-  label,
-  icon: Icon,
-  isActive,
+  item,
   isCollapsed,
-  isBeta = false,
 }: {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  isActive: boolean;
+  item: NavItemConfig;
   isCollapsed: boolean;
-  isBeta?: boolean;
 }) {
+  const pathname = usePathname();
+  const isActive = item.children
+    ? pathname.startsWith(item.href)
+    : pathname === item.href;
+
+  const [isOpen, setIsOpen] = useState(isActive);
+
+  useEffect(() => {
+    setIsOpen(pathname.startsWith(item.href));
+  }, [pathname, item.href]);
+
+  const { href, label, icon: Icon, isBeta, children } = item;
+
   const content = (
     <div
       className={cn(
-        buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
-        "flex h-10 w-full items-center justify-start gap-3"
+        "relative flex h-10 w-full items-center justify-start gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        isActive
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-accent hover:text-accent-foreground",
+        isCollapsed ? "justify-center" : "justify-start"
       )}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
@@ -219,33 +292,60 @@ function NavItem({
         <>
           <span className="flex-grow text-left">{label}</span>
           {isBeta && <Badge variant="outline">Beta</Badge>}
+          {children && (
+            <ChevronRight
+              className={cn(
+                "h-4 w-4 transform transition-transform duration-200",
+                isOpen && "rotate-90"
+              )}
+            />
+          )}
         </>
+      )}
+      {isActive && !isCollapsed && (
+        <motion.div
+          layoutId="active-glow"
+          className="absolute left-0 h-6 w-1 bg-primary rounded-r-full"
+          initial={false}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+        />
       )}
     </div>
   );
 
-  return isCollapsed ? (
-    <Tooltip delayDuration={0}>
-      <TooltipTrigger asChild>
-        <Link href={href}>{content}</Link>
-      </TooltipTrigger>
-      <TooltipContent side="right" className="flex items-center gap-4">
-        {label}
-        {isBeta && (
-          <Badge variant="secondary" className="ml-auto">
-            Beta
-          </Badge>
-        )}
-      </TooltipContent>
-    </Tooltip>
-  ) : (
-    <Link href={href}>{content}</Link>
+  const linkWrapper = (
+    <Link href={href} className="relative">
+      {isCollapsed ? (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{content}</TooltipTrigger>
+          <TooltipContent side="right">{label}</TooltipContent>
+        </Tooltip>
+      ) : (
+        content
+      )}
+    </Link>
   );
+
+  if (children && !isCollapsed) {
+    return (
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger asChild>
+          <button type="button" className="w-full">
+            {content}
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pl-8 pt-1 space-y-1">
+          {children.map((child) => (
+            <NavItem key={child.href} item={child} isCollapsed={false} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
+
+  return linkWrapper;
 }
 
-// ============================================================================
-// --- User Menu (Used in Header) ---
-// ============================================================================
 function UserMenu() {
   const router = useRouter();
   const {
@@ -255,7 +355,6 @@ function UserMenu() {
   } = useSocialWallet();
   const { address: walletAddr, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-
   const loggedIn = isSocial || isConnected;
   const addr = socialAddr ?? walletAddr;
 
@@ -278,7 +377,7 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-9 w-9">
+          <Avatar className="h-9 w-9 border-2 border-primary/50">
             <AvatarFallback>{addr?.slice(2, 4).toUpperCase()}</AvatarFallback>
           </Avatar>
         </Button>
@@ -301,5 +400,3 @@ function UserMenu() {
     </DropdownMenu>
   );
 }
-
-// FIXED: Menghapus fungsi Separator lokal yang menyebabkan error.

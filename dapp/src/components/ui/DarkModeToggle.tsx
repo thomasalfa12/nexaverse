@@ -1,66 +1,36 @@
-// src/components/DarkModeToggle.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import clsx from "clsx";
+import * as React from "react";
+import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-interface Props {
-  className?: string;
-}
+export default function DarkModeToggle() {
+  // Gunakan hook dari next-themes yang terhubung langsung ke ThemeProvider
+  const { theme, setTheme } = useTheme();
 
-export default function DarkModeToggle({ className }: Props) {
-  /* 1️⃣ mulai selalu false (match SSR) */
-  const [dark, setDark] = useState(false);
-  /* 2️⃣ flag agar kita tahu sudah di‑mount */
-  const [mounted, setMounted] = useState(false);
+  // State untuk mencegah hydration mismatch di server
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
 
-  /* 3️⃣ di client → sync dari localStorage & DOM */
-  useEffect(() => {
-    const saved = localStorage.getItem("nexa_dark") === "1";
-    setDark(saved); // safe: hanya client
-    setMounted(true); // hydration sudah selesai
-  }, []);
-
-  /* 4️⃣ apply & persist setiap kali dark berubah */
-  useEffect(() => {
-    if (!mounted) return; // hindari efek sebelum sync
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("nexa_dark", dark ? "1" : "0");
-  }, [dark, mounted]);
-
-  /* 5️⃣ jaga agar icon muncul setelah mount supaya tak mismatch */
   if (!mounted) {
+    // Tampilkan placeholder saat server-side rendering
     return (
-      <button
-        aria-label="Toggle dark mode"
-        className={clsx(
-          "rounded-full bg-gray-200 p-2 shadow dark:bg-zinc-700",
-          className
-        )}
-      >
-        {/* placeholder ikon statis (sesuai default SSR) */}
-        <Moon className="h-4 w-4" />
-      </button>
+      <Button variant="ghost" size="icon" className="h-10 w-10" disabled />
     );
   }
 
-  /* 6️⃣ UI normal */
   return (
-    <button
-      onClick={() => setDark((d) => !d)}
-      aria-label="Toggle dark mode"
-      className={clsx(
-        "rounded-full bg-gray-200 p-2 shadow transition hover:bg-gray-300",
-        "dark:bg-zinc-700 dark:hover:bg-zinc-600",
-        className
-      )}
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-10 w-10 rounded-full"
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      aria-label="Toggle theme"
     >
-      {dark ? (
-        <Sun className="h-4 w-4 text-yellow-400" />
-      ) : (
-        <Moon className="h-4 w-4" />
-      )}
-    </button>
+      <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <span className="sr-only">Toggle theme</span>
+    </Button>
   );
 }

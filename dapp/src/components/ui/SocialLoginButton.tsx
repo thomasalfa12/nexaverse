@@ -1,5 +1,5 @@
 "use client";
-import { useSocialWallet } from "@/lib/useSocialWallet";
+import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
 import { useRouter } from "next/navigation";
 
 export default function SocialLoginButton() {

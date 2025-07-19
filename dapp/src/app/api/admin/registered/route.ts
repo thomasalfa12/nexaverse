@@ -4,7 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { NextResponse } from "next/server";
 import { getPublicClient } from "@wagmi/core";
 import { contracts } from "@/lib/contracts";
-import { wagmiConfig } from "@/lib/wallet"; // wagmi config kamu sendiri
+import { wagmiConfig } from "@/lib/walletProviders/wallet"; // wagmi config kamu sendiri
 
 export async function GET() {
   try {
