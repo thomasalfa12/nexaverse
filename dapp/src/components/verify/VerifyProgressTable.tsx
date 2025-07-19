@@ -4,16 +4,10 @@ import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { Loader2, FileText, UserCheck, Award, Building } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-// --- PERBAIKAN: Mengembalikan impor asli dari file server Anda ---
 import { getVerifyStatus, VerifyStatus } from "@/lib/server/verify";
-
-// Komponen-komponen ini diimpor seperti sebelumnya.
 import RegisterForm from "./RegisterForm";
 import { RequestMintForm } from "./RequestMintForm";
 import { ClaimSBTButton } from "./ClaimSBTButton";
-
-// Komponen UI dari shadcn, tidak perlu diubah.
 import {
   Table,
   TableHeader,
@@ -24,10 +18,6 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-// ========================================================================
-// VERSI BARU DARI KOMPONEN INTERNAL ANDA (HANYA PERUBAHAN VISUAL)
-// ========================================================================
 
 // Modifikasi pada 'Row' untuk menjadi 'TimelineRow' yang lebih visual
 function TimelineRow({
@@ -100,10 +90,6 @@ function StatusBox({ text, success }: { text: string; success?: boolean }) {
     </Alert>
   );
 }
-
-// ========================================================================
-// KOMPONEN UTAMA DENGAN LOGIKA ASLI ANDA, HANYA JSX YANG DISESUAIKAN
-// ========================================================================
 
 export default function VerifyProgressTable() {
   const [status, setStatus] = useState<VerifyStatus | null>(null);

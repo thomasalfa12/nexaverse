@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-
-// Shadcn UI & Lucide Icons
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,50 +11,69 @@ import { contracts } from "@/lib/contracts";
 import { Wallet, Copy, Check, Send, Loader2, Info } from "lucide-react";
 
 export function RequestMintForm({ onSuccess }: { onSuccess?: () => void }) {
-  // --- SEMUA LOGIKA ANDA TETAP SAMA, TIDAK ADA PERUBAHAN ---
   const { address } = useAccount();
   const [isPending, startTransition] = useTransition();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const handleSubmit = () => {
-    if (!address) {
-      toast.error("Wallet belum terhubung.");
+    if (!address || !publicClient) {
+      toast.error("Wallet belum terhubung atau provider tidak ditemukan.");
       return;
     }
 
     startTransition(async () => {
       try {
-        await writeContractAsync({
+        toast.info("Silakan konfirmasi transaksi di wallet Anda...");
+        const txHash = await writeContractAsync({
           address: contracts.institution.address,
           abi: contracts.institution.abi,
           functionName: "requestMint",
           args: [],
         });
 
+        toast.loading("Mengirim permintaan on-chain, menunggu konfirmasi...", {
+          id: "req-mint-tx",
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        });
+        if (receipt.status === "reverted") {
+          throw new Error("Transaksi on-chain gagal (reverted).");
+        }
+
+        toast.dismiss("req-mint-tx");
+        toast.success("Permintaan on-chain berhasil dikonfirmasi!");
+
         const res = await fetch("/api/user/request-mint", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address }),
+          body: JSON.stringify({ address, txHash }),
         });
 
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data?.error || "Gagal menyimpan permintaan ke DB");
+          throw new Error(
+            data?.error || "Gagal menyimpan permintaan ke database."
+          );
         }
 
-        toast.success("Permintaan mint berhasil dikirim!");
+        toast.success("Permintaan mint berhasil dicatat!");
         onSuccess?.();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err: unknown) {
+        // FIX: Gunakan `unknown` bukan `any` untuk type safety
+        toast.dismiss("req-mint-tx");
         console.error("Mint request error", err);
-        toast.error(
-          err.message || "Terjadi kesalahan saat mengajukan permintaan."
-        );
+        // Lakukan type check untuk mengakses properti .message dengan aman
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Terjadi kesalahan saat mengajukan permintaan.";
+        toast.error(errorMessage);
       }
     });
   };
-  // --- AKHIR DARI BLOK LOGIKA YANG TIDAK DIUBAH ---
-
   // State tambahan untuk UX tombol copy
   const [isCopied, setIsCopied] = useState(false);
 

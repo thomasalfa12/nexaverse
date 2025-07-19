@@ -8,38 +8,52 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
-model InstitutionRequest {
-  id               Int      @id @default(autoincrement())
-  name             String
-  officialWebsite  String
-  contactEmail     String
-  institutionType  Int
-  walletAddress    String   @unique
-  createdAt        DateTime @default(now())
-}
-model InstitutionList {
-  id               Int      @id @default(autoincrement())
-  name             String
-  officialWebsite  String
-  contactEmail     String
-  institutionType  Int
-  walletAddress    String   @unique
-  createdAt        DateTime @default(now())
+
+enum RegistrationStatus {
+  PENDING
+  REGISTERED
+  REJECTED // Opsional, untuk masa depan jika Anda ingin menolak permintaan
 }
 
-model SBTRequest {
-  id        String   @id @default(cuid())
-  Address   String   @unique
-  uri       String?
-  approved  Boolean  @default(false)
-  createdAt DateTime @default(now())
+enum SbtStatus {
+  PENDING
+  APPROVED
+  CLAIMED
+  REJECTED
 }
 
-model SBTApproval {
-  id              String   @id @default(cuid())
-  address         String   @unique
-  tokenId         Int   // <- ini id row atau ID internal kamu
-  uri             String
+// GANTI InstitutionRequest & InstitutionList DENGAN INI
+model Institution {
+  id              Int      @id @default(autoincrement())
+  name            String
+  officialWebsite String
+  contactEmail    String
+  institutionType Int
+  walletAddress   String   @unique
   createdAt       DateTime @default(now())
 
+  // Kolom baru yang krusial
+  status             RegistrationStatus @default(PENDING)
+  registrationTxHash String?
+  registeredAt       DateTime?
+  SbtMint            SbtMint?
+}
+
+model SbtMint {
+  id            String      @id @default(cuid())
+  institutionId Int         @unique // Pastikan setiap institusi hanya bisa punya satu permintaan SBT
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  status        SbtStatus   @default(PENDING)
+
+  tokenId        Int?      @unique
+  uri            String?
+  approvalTxHash String?
+  approvedAt     DateTime?
+
+  claimTxHash String?
+  claimedAt   DateTime?
+
+  requestTxHash String? // Simpan bukti permintaan on-chain
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

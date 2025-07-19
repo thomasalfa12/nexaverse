@@ -20,7 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-// Komponen baru yang didedikasikan untuk menampilkan keberhasilan
+// Komponen ini tidak perlu diubah, sudah bagus.
 const ClaimSuccessView = ({
   hash,
   onSuccess,
@@ -28,11 +28,10 @@ const ClaimSuccessView = ({
   hash: `0x${string}`;
   onSuccess?: () => void;
 }) => {
-  // Panggil onSuccess setelah animasi selesai agar transisi ke step berikutnya lebih mulus
   useEffect(() => {
     const timer = setTimeout(() => {
       onSuccess?.();
-    }, 3000); // Beri waktu 3 detik bagi pengguna untuk menikmati perayaan
+    }, 3000);
     return () => clearTimeout(timer);
   }, [onSuccess]);
 
@@ -52,8 +51,6 @@ const ClaimSuccessView = ({
       <p className="text-green-700 mt-1 mb-4 text-sm">
         Selamat! Soulbound Token Anda kini aman di dalam wallet Anda.
       </p>
-
-      {/* Tautan ke Block Explorer - Fitur UX Penting di Web3 */}
       <a
         href={explorerUrl}
         target="_blank"
@@ -68,13 +65,20 @@ const ClaimSuccessView = ({
 };
 
 export function ClaimSBTButton({ onSuccess }: { onSuccess?: () => void }) {
-  // --- SEMUA LOGIKA ANDA TETAP SAMA, TIDAK ADA PERUBAHAN ---
   const { address } = useAccount();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
   const { writeContractAsync } = useWriteContract();
-  const { isLoading, isSuccess } = useWaitForTransactionReceipt({ hash });
-  const [pending, startTransition] = useTransition();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({ hash });
 
+  // State untuk melacak proses sinkronisasi ke backend
+  const [isSyncing, setIsSyncing] = useState(false);
+  // State untuk menandakan seluruh proses (on-chain + off-chain) selesai
+  const [isProcessComplete, setIsProcessComplete] = useState(false);
+
+  const [isSubmitting, startTransition] = useTransition();
+
+  // FUNGSI INTI UNTUK MEMULAI KLAIM ON-CHAIN
   async function handleClaim() {
     if (!address) return;
     startTransition(async () => {
@@ -85,23 +89,59 @@ export function ClaimSBTButton({ onSuccess }: { onSuccess?: () => void }) {
           functionName: "claim",
           args: [],
         });
-        toast.success("Transaksi klaim terkirim!");
         setHash(txHash);
-        // onSuccess tidak dipanggil di sini lagi, tapi di dalam SuccessView
       } catch (err) {
+        // Error ini biasanya terjadi jika pengguna menolak transaksi di wallet
         console.error(err);
-        toast.error("Gagal klaim token.");
+        toast.error("Transaksi klaim gagal atau dibatalkan.");
       }
     });
   }
-  // --- AKHIR DARI BLOK LOGIKA YANG TIDAK DIUBAH ---
 
-  // Jika sudah sukses, tampilkan komponen perayaan
-  if (isSuccess && hash) {
+  // --- INI ADALAH LOGIKA SINKRONISASI YANG DITAMBAHKAN ---
+  // useEffect ini akan berjalan ketika transaksi on-chain telah dikonfirmasi.
+  useEffect(() => {
+    // Pastikan ini hanya berjalan ketika transaksi SUKSES, dan hanya SEKALI.
+    if (isConfirmed && hash && address && !isSyncing) {
+      const finalizeClaim = async () => {
+        setIsSyncing(true); // Tandai bahwa proses sinkronisasi dimulai
+        try {
+          toast.info("Sinkronisasi status ke database...");
+          const res = await fetch("/api/user/finalize-claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address, txHash: hash }),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(
+              errorData.error || "Gagal memperbarui status di database."
+            );
+          }
+
+          toast.success("Status berhasil disinkronkan!");
+          setIsProcessComplete(true); // Tandai seluruh proses selesai
+        } catch (err: unknown) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Gagal sinkronisasi.";
+          toast.error(errorMessage);
+          console.error("Finalize claim error:", err);
+        } finally {
+          setIsSyncing(false); // Tandai proses sinkronisasi berakhir
+        }
+      };
+
+      finalizeClaim();
+    }
+  }, [isConfirmed, hash, address, isSyncing]);
+
+  // Jika seluruh proses (on-chain + off-chain) selesai, tampilkan pesan sukses akhir.
+  if (isProcessComplete && hash) {
     return <ClaimSuccessView hash={hash} onSuccess={onSuccess} />;
   }
 
-  // Tampilan default sebelum atau selama proses klaim
+  // Tampilan default tombol klaim
   return (
     <div className="w-full max-w-lg mx-auto space-y-4 text-center p-4 bg-gray-50 rounded-xl border">
       <div className="flex justify-center">
@@ -117,14 +157,24 @@ export function ClaimSBTButton({ onSuccess }: { onSuccess?: () => void }) {
       <div className="pt-2">
         <Button
           onClick={handleClaim}
-          disabled={pending || isLoading}
+          disabled={isSubmitting || isConfirming || isSyncing}
           className="w-full text-base py-6 font-bold rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 transform hover:-translate-y-0.5"
           size="lg"
         >
-          {pending || isLoading ? (
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Menunggu Konfirmasi Wallet...
+            </>
+          ) : isConfirming ? (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               Mengklaim di Blockchain...
+            </>
+          ) : isSyncing ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Menyelesaikan Sinkronisasi...
             </>
           ) : (
             <>

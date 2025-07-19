@@ -1,22 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  usePublicClient,
+  useReadContract,
+  useWriteContract,
+} from "wagmi";
 import { contracts } from "@/lib/contracts";
-import { useRouter } from "next/navigation";
+// REMOVED: useRouter tidak digunakan
+// import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import RequestTable from "@/components/admin/RequestTable";
 import InstitutionTable from "@/components/admin/InstitutionTable";
 import InstitutionStats from "@/components/admin/InstitutionStats";
-import RequestSBTTable from "@/components/admin/RequestSBTTable";
-import type { InstitutionRequest, InstitutionList } from "@/utils/institution";
-import type { SBTRequest } from "@/components/admin/RequestSBTTable";
+import RequestSBTTable, {
+  type SbtMintWithInstitution, // Tipe ini sudah benar
+} from "@/components/admin/RequestSBTTable";
+import type { Institution } from "@prisma/client"; // Tipe ini dibutuhkan
+// REMOVED: SbtMint dari prisma tidak digunakan langsung di sini
+// REMOVED: SBTRequest tidak lagi ada
+// import type { SBTRequest } from "@/components/admin/RequestSBTTable";
 import { toast } from "sonner";
 
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
-  const router = useRouter();
+  const publicClient = usePublicClient();
 
   const { data: owner } = useReadContract({
     address: contracts.registry.address,
@@ -24,10 +34,10 @@ export default function AdminPage() {
     functionName: "owner",
   });
 
-  const [requests, setRequests] = useState<InstitutionRequest[]>([]);
-  const [registeredList, setRegisteredList] = useState<InstitutionList[]>([]);
-  const [sbtRequests, setSbtRequests] = useState<SBTRequest[]>([]);
-  const [approvedAddresses, setApprovedAddresses] = useState<string[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Institution[]>([]);
+  const [registeredList, setRegisteredList] = useState<Institution[]>([]);
+  // FIX: Gunakan tipe data yang benar dari komponen anak
+  const [sbtRequests, setSbtRequests] = useState<SbtMintWithInstitution[]>([]);
 
   const isAdmin =
     typeof owner === "string" &&
@@ -35,9 +45,10 @@ export default function AdminPage() {
     owner.toLowerCase() === address.toLowerCase();
 
   useEffect(() => {
-    if (!isConnected || !isAdmin) return;
-    fetchInstitutionData();
-    fetchSBTRequests();
+    if (isConnected && isAdmin) {
+      fetchInstitutionData();
+      fetchSBTRequests();
+    }
   }, [isConnected, isAdmin]);
 
   const fetchInstitutionData = async () => {
@@ -52,8 +63,8 @@ export default function AdminPage() {
         resRegistered.json(),
       ]);
 
-      setRequests(pending);
-      setRegisteredList(registered); // Should be InstitutionList[]
+      setPendingRequests(pending);
+      setRegisteredList(registered);
     } catch (err) {
       console.error("[fetchInstitutionData]", err);
       toast.error("Gagal memuat data institusi.");
@@ -62,37 +73,30 @@ export default function AdminPage() {
 
   const fetchSBTRequests = async () => {
     try {
-      const res = await fetch("/api/admin/registry/mint-request");
-      const approvedRes = await fetch("/api/admin/registry/signed");
-
-      const dbRequests: { id: number; Address: string; uri?: string }[] =
-        await res.json();
-
-      const approvedData: { address: string }[] = await approvedRes.json();
-      const approved = approvedData.map((d) => d.address.toLowerCase());
-
-      const requests: SBTRequest[] = dbRequests.map((item) => ({
-        to: item.Address,
-        tokenId: item.id.toString(),
-        uri: item.uri ?? "",
-      }));
-
-      setSbtRequests(requests);
-      setApprovedAddresses(approved);
+      const res = await fetch("/api/admin/registry/sbt-requests");
+      if (!res.ok) throw new Error("Gagal memuat permintaan SBT");
+      // Tipe data di sini sudah benar
+      const data: SbtMintWithInstitution[] = await res.json();
+      setSbtRequests(data);
     } catch (err) {
       console.error("[fetchSBTRequests]", err);
-      toast.error("Gagal memuat data mint request.");
+      toast.error("Gagal memuat permintaan SBT.");
     }
   };
 
-  const handleRegister = async (institution: InstitutionRequest) => {
+  const handleRegister = async (institution: Institution) => {
+    if (!publicClient) {
+      toast.error("Gagal terhubung ke provider blockchain.");
+      return;
+    }
     try {
-      await writeContractAsync({
+      toast.info("Silakan konfirmasi transaksi di wallet Anda...");
+      const txHash = await writeContractAsync({
         address: contracts.registry.address,
         abi: contracts.registry.abi,
         functionName: "registerInstitution",
         args: [
-          institution.walletAddress,
+          institution.walletAddress as `0x${string}`,
           institution.name,
           institution.officialWebsite,
           institution.contactEmail,
@@ -100,52 +104,97 @@ export default function AdminPage() {
         ],
       });
 
-      toast.success("✅ Institusi berhasil didaftarkan ke registry");
-      await fetchInstitutionData();
-    } catch (err) {
-      console.error("[handleRegister]", err);
-      toast.error("❌ Gagal mendaftarkan institusi.");
-    }
-  };
-
-  const handleApprove = async (req: SBTRequest) => {
-    const tokenId = req.tokenId;
-    const uri = prompt("Masukkan URI metadata (ipfs://...)", req.uri || "");
-
-    if (!uri) {
-      toast.error("URI tidak boleh kosong.");
-      return;
-    }
-
-    try {
-      await writeContractAsync({
-        address: contracts.institution.address,
-        abi: contracts.institution.abi,
-        functionName: "approveMintRequest",
-        args: [req.to, uri],
+      toast.loading("Transaksi dikirim, menunggu konfirmasi on-chain...", {
+        id: "tx-receipt",
       });
 
-      const res = await fetch("/api/admin/registry/approve", {
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+
+      if (receipt.status === "reverted") {
+        throw new Error("Transaksi on-chain gagal (reverted).");
+      }
+
+      toast.dismiss("tx-receipt");
+      toast.success("Transaksi on-chain berhasil!");
+
+      const res = await fetch("/api/admin/registry/finalize-registration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: req.to, tokenId, uri }),
+        body: JSON.stringify({
+          institutionId: institution.id,
+          txHash: txHash,
+        }),
       });
 
       if (!res.ok) {
-        throw new Error("Gagal simpan approval ke DB");
+        throw new Error("Gagal memperbarui status di database.");
       }
 
-      toast.success("✅ Berhasil menyetujui mint SBT");
-      router.refresh();
-    } catch (err) {
-      console.error("[handleApprove]", err);
-      toast.error("❌ Gagal menyetujui mint.");
+      toast.success("✅ Institusi berhasil terdaftar on-chain dan off-chain!");
+      fetchInstitutionData();
+    } catch (err: unknown) {
+      // FIX: Gunakan `unknown` untuk type safety
+      toast.dismiss("tx-receipt");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Terjadi kesalahan tidak diketahui.";
+      console.error("[handleRegister]", err);
+      toast.error(errorMessage);
     }
   };
 
-  const pendingRequests = requests.filter(
-    (r) => !registeredList.some((reg) => reg.walletAddress === r.walletAddress)
-  );
+  const handleApprove = async (req: SbtMintWithInstitution) => {
+    if (!publicClient) {
+      toast.error("Gagal terhubung ke provider blockchain.");
+      return;
+    }
+
+    const uri = prompt("Masukkan URI metadata (ipfs://...)", req.uri || "");
+    if (!uri) return toast.error("URI tidak boleh kosong.");
+
+    try {
+      toast.info("Silakan konfirmasi transaksi persetujuan di wallet...");
+      const txHash = await writeContractAsync({
+        address: contracts.institution.address,
+        abi: contracts.institution.abi,
+        functionName: "approveMintRequest",
+        args: [req.institution.walletAddress, uri],
+      });
+
+      toast.loading("Transaksi persetujuan dikirim, menunggu konfirmasi...", {
+        id: "sbt-approve-tx",
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status === "reverted")
+        throw new Error("Transaksi on-chain gagal.");
+
+      toast.dismiss("sbt-approve-tx");
+      toast.success("Persetujuan on-chain berhasil!");
+
+      await fetch("/api/admin/registry/finalize-sbt-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sbtMintId: req.id, uri, txHash }),
+      });
+
+      toast.success("✅ Persetujuan SBT berhasil disinkronkan!");
+      fetchSBTRequests();
+    } catch (err: unknown) {
+      toast.dismiss("sbt-approve-tx");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Terjadi kesalahan tidak diketahui.";
+      console.error("[handleApprove]", err);
+      toast.error(errorMessage);
+    }
+  };
 
   if (!isConnected) {
     return (
@@ -179,11 +228,7 @@ export default function AdminPage() {
 
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-2">🖊️ Permintaan Mint SBT</h2>
-        <RequestSBTTable
-          requests={sbtRequests}
-          approved={approvedAddresses}
-          onApprove={handleApprove}
-        />
+        <RequestSBTTable requests={sbtRequests} onApprove={handleApprove} />
       </section>
 
       <section>

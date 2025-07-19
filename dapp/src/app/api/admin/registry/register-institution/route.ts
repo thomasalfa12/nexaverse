@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { RegistrationStatus } from "@prisma/client";
 
-// GET: Ambil semua permintaan dari database
+// GET: Ambil semua permintaan yang masih PENDING
 export async function GET() {
   try {
-    const requests = await prisma.institutionRequest.findMany({
+    const requests = await prisma.institution.findMany({
+      where: { status: RegistrationStatus.PENDING }, // Filter berdasarkan status
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(requests);
@@ -14,7 +16,7 @@ export async function GET() {
   }
 }
 
-// POST: Simpan permintaan baru ke database
+// POST: Simpan permintaan baru sebagai PENDING
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -24,25 +26,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    const exists = await prisma.institutionRequest.findUnique({
+    const exists = await prisma.institution.findUnique({
       where: { walletAddress },
     });
 
     if (exists) {
-      return NextResponse.json({ error: "Already requested" }, { status: 409 });
+      return NextResponse.json({ error: "Wallet address already submitted" }, { status: 409 });
     }
 
-    const newReq = await prisma.institutionRequest.create({
+    // Buat entri di model Institution yang baru
+    const newInstitution = await prisma.institution.create({
       data: {
         name,
         officialWebsite,
         contactEmail,
         institutionType,
         walletAddress,
+        status: RegistrationStatus.PENDING, // Status default
       },
     });
 
-    return NextResponse.json(newReq);
+    return NextResponse.json(newInstitution);
   } catch (err) {
     console.error("POST /api/admin/registry/institutions error", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

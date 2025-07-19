@@ -1,27 +1,39 @@
-// src/app/api/request/mint/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { SbtStatus } from "@prisma/client";
 
 export async function POST(req: Request) {
   try {
-    const { address } = await req.json();
-    if (!address) {
-      return NextResponse.json({ error: "Missing address" }, { status: 400 });
+    const { address, txHash } = await req.json();
+    if (!address || !txHash) {
+      return NextResponse.json({ error: "Missing address or txHash" }, { status: 400 });
     }
 
-    const existing = await prisma.sBTRequest.findUnique({
-      where: { Address: address },
+    const institution = await prisma.institution.findUnique({
+      where: { walletAddress: address },
     });
 
-    if (existing) {
-      return NextResponse.json({ message: "Request already exists" });
+    if (!institution) {
+      return NextResponse.json({ error: "Institution not found" }, { status: 404 });
     }
 
-    await prisma.sBTRequest.create({
-      data: { Address: address },
+    const existingRequest = await prisma.sbtMint.findUnique({
+      where: { institutionId: institution.id },
     });
 
-    return NextResponse.json({ message: "Mint request submitted" });
+    if (existingRequest) {
+      return NextResponse.json({ message: "Request already exists" }, { status: 409 });
+    }
+
+    await prisma.sbtMint.create({
+      data: {
+        institutionId: institution.id,
+        status: SbtStatus.PENDING,
+        requestTxHash: txHash, // Simpan bukti transaksi
+      },
+    });
+
+    return NextResponse.json({ message: "Mint request recorded" });
   } catch (error) {
     console.error("[POST /api/user/request-mint]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

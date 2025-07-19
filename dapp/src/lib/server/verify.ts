@@ -1,15 +1,12 @@
 "use server";
 
-import { baseSepolia } from "viem/chains";
-import { contracts } from "@/lib/contracts";
 import { prisma } from "@/lib/server/prisma";
-import { createPublicClient, http } from "viem";
+import { RegistrationStatus, SbtStatus } from "@prisma/client";
 
-const publicClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(),
-});
-
+/**
+ * Tipe data yang dikembalikan untuk merepresentasikan status verifikasi pengguna
+ * di seluruh alur aplikasi.
+ */
 export type VerifyStatus = {
   registered: boolean;
   requested: boolean;
@@ -17,115 +14,48 @@ export type VerifyStatus = {
   claimed: boolean;
 };
 
-type MintRequest = {
-  approved: boolean;
-  claimed: boolean;
-  uri: string;
-};
-
+/**
+ * Fungsi utama untuk mendapatkan status verifikasi lengkap seorang pengguna (institusi).
+ * Ini adalah SATU-SATUNYA FUNGSI yang harus dipanggil oleh frontend (VerifyProgressTable)
+ * untuk menentukan langkah mana yang harus ditampilkan kepada pengguna.
+ */
 export async function getVerifyStatus(address: `0x${string}`): Promise<VerifyStatus> {
   try {
-    const [registered, requested, mintRequest] = await Promise.all([
-      checkIsRegistered(address),
-      checkMintRequested(address),
-      getMintRequestStatus(address),
-    ]);
+    const lowercasedAddress = address.toLowerCase();
 
+    // Lakukan SATU kueri efisien untuk mendapatkan semua data yang kita butuhkan.
+    const institution = await prisma.institution.findUnique({
+      where: { walletAddress: lowercasedAddress },
+      include: {
+        SbtMint: true, // Sertakan data SbtMint yang berelasi
+      },
+    });
+
+    // Jika tidak ada data institusi, berarti pengguna belum melakukan apa-apa.
+    if (!institution) {
+      return { registered: false, requested: false, approved: false, claimed: false };
+    }
+
+    const sbtRequest = institution.SbtMint;
+
+    // Kembalikan status yang sepenuhnya berasal dari database kita.
     return {
-      registered,
-      requested,
-      approved: mintRequest?.approved ?? false,
-      claimed: mintRequest?.claimed ?? false,
+      // 'registered' jika status di tabel Institution adalah REGISTERED.
+      registered: institution.status === RegistrationStatus.REGISTERED,
+      
+      // 'requested' jika ada entri SbtMint yang terkait.
+      requested: !!sbtRequest,
+      
+      // FIX: 'approved' harus true jika statusnya APPROVED ATAU SUDAH MELEWATINYA (CLAIMED).
+      // Ini adalah perbaikan logika utama.
+      approved: sbtRequest?.status === SbtStatus.APPROVED || sbtRequest?.status === SbtStatus.CLAIMED,
+      
+      // 'claimed' jika status di SbtMint adalah CLAIMED.
+      claimed: sbtRequest?.status === SbtStatus.CLAIMED,
     };
   } catch (err) {
     console.error("[getVerifyStatus] error:", err);
-    return {
-      registered: false,
-      requested: false,
-      approved: false,
-      claimed: false,
-    };
+    // Kembalikan status default jika terjadi error.
+    return { registered: false, requested: false, approved: false, claimed: false };
   }
 }
-
-export async function checkIsRegistered(address: `0x${string}`): Promise<boolean> {
-  try {
-    const result = await publicClient.readContract({
-      address: contracts.registry.address,
-      abi: contracts.registry.abi,
-      functionName: "isRegisteredInstitution",
-      args: [address],
-    });
-    return Boolean(result);
-  } catch (err) {
-    console.error("[checkIsRegistered]", err);
-    return false;
-  }
-}
-
-async function checkMintRequested(address: `0x${string}`): Promise<boolean> {
-  try {
-    const request = await prisma.sBTRequest.findUnique({
-      where: { Address: address },
-    });
-    return !!request;
-  } catch (err) {
-    console.error("[checkMintRequested]", err);
-    return false;
-  }
-}
-
-async function getMintRequestStatus(address: `0x${string}`): Promise<MintRequest | null> {
-  try {
-    // ambil approval info dari DB
-    const approval = await prisma.sBTApproval.findFirst({
-      where: {
-        address: address.toLowerCase(),
-      },
-      select: {
-        uri: true,
-      },
-    });
-
-    // ambil status approved dari request table
-    const request = await prisma.sBTRequest.findUnique({
-      where: {
-        Address: address,
-      },
-      select: {
-        approved: true,
-      },
-    });
-
-    if (!request) return null;
-
-    // cek apakah sudah diklaim
-    let claimed = false;
-
-    try {
-      const balance = await publicClient.readContract({
-        address: contracts.institution.address,
-        abi: contracts.institution.abi,
-        functionName: "balanceOf",
-        args: [address],
-      }) as bigint;
-
-      claimed = BigInt(balance) > 0n;
-    } catch (err) {
-      console.warn("[getMintRequestStatus] balanceOf failed", err);
-      claimed = false;
-    }
-
-    return {
-      approved: request.approved,
-      uri: approval?.uri ?? "",
-      claimed,
-    };
-  } catch (err) {
-    console.error("[getMintRequestStatus]", err);
-    return null;
-  }
-}
-
-
-
