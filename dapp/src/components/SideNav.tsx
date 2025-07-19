@@ -359,7 +359,9 @@ function UserMenu() {
   const addr = socialAddr ?? walletAddr;
 
   const handleLogout = async () => {
-    await fetch("/api/siwe/logout", { method: "POST" }).catch(() => {});
+    await fetch("/api/user/login/siwe/logout", { method: "POST" }).catch(
+      () => {}
+    );
     if (isSocial) await socialLogout();
     else if (isConnected) disconnect();
     router.replace("/");

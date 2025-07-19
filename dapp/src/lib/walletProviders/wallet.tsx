@@ -8,18 +8,17 @@ import {
   lightTheme,
   darkTheme,
 } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
+import { WagmiProvider, type State } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const wagmiConfig = getDefaultConfig({
   appName: "Nexaverse",
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID!,
   chains: [baseSepolia],
-  ssr: true,
+  ssr: true, // Pastikan ssr: true tetap ada
 });
 
 const queryClient = new QueryClient();
@@ -45,7 +44,13 @@ function ThemedRainbowKitProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function Web3Provider({ children }: { children: React.ReactNode }) {
+export function Web3Provider({
+  children,
+  initialState,
+}: {
+  children: React.ReactNode;
+  initialState?: State;
+}) {
   return (
     <ThemeProvider
       attribute="class"
@@ -53,12 +58,9 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <WagmiProvider config={wagmiConfig}>
+      <WagmiProvider config={wagmiConfig} initialState={initialState}>
         <QueryClientProvider client={queryClient}>
-          <ThemedRainbowKitProvider>
-            {children}
-            {/* PERBAIKAN: Typo fatal telah diperbaiki di sini */}
-          </ThemedRainbowKitProvider>
+          <ThemedRainbowKitProvider>{children}</ThemedRainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
     </ThemeProvider>
