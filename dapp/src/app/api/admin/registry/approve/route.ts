@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[POST /api/admin/approve]", error);
+    console.error("[POST /api/admin/registry/approve]", error);
     return NextResponse.json({ error: "Approval failed" }, { status: 500 });
   }
 }

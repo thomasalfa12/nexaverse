@@ -46,7 +46,7 @@ export function useSocialWallet() {
           if (accounts?.length) {
             const addr = accounts[0];
             setAddress(addr);
-            await fetch("/api/social/login", {
+            await fetch("/api/user/login/social", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ address: addr }),

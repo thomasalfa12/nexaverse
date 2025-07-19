@@ -49,7 +49,7 @@ export default function RequestTable({ requests, onRegister }: Props) {
   const handleRegister = async (req: InstitutionRequest, idx: number) => {
     setPending(idx);
     try {
-      const res = await fetch("/api/admin/approve-request", {
+      const res = await fetch("/api/admin/registry/approve-request", {
         method: "POST",
         body: JSON.stringify({ id: req.id }),
       });

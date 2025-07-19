@@ -34,7 +34,7 @@ export async function GET() {
     const filtered = verifiedInstitutions.filter(Boolean);
     return NextResponse.json(filtered);
   } catch (err) {
-    console.error("[GET /admin/registered]", err);
+    console.error("[GET /admin/registry/registered]", err);
     return NextResponse.json(
       { error: "Failed to fetch registered institutions" },
       { status: 500 }

@@ -15,7 +15,7 @@ export async function GET() {
 
     return NextResponse.json(requests);
   } catch (error) {
-    console.error("[GET /api/admin/mint-request]", error);
+    console.error("[GET /api/admin/registry/mint-request]", error);
     return NextResponse.json({ error: "Failed to fetch request" }, { status: 500 });
   }
 }

@@ -11,10 +11,10 @@ export function useSiweLogin() {
     if (!isConnected) return;
     setLoading(true);
     try {
-      const { nonce } = await fetch("/api/siwe").then((r) => r.json());
+      const { nonce } = await fetch("/api/user/login/siwe").then((r) => r.json());
       const msg = `Nexaverse wants you to sign in.\n\nNonce: ${nonce}`;
       const sig = await signMessageAsync({ message: msg });
-      const res = await fetch("/api/siwe", {
+      const res = await fetch("/api/user/login/siwe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, signature: sig }),

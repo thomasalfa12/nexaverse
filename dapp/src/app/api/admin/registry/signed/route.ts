@@ -9,7 +9,7 @@ export async function GET() {
 
     return NextResponse.json(approvals);
   } catch (error) {
-    console.error("[GET /api/admin/signed]", error);
+    console.error("[GET /api/admin/registry/signed]", error);
     return NextResponse.json({ error: "Failed to fetch signed approvals" }, { status: 500 });
   }
 }

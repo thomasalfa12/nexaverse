@@ -33,7 +33,7 @@ export function RequestMintForm({ onSuccess }: { onSuccess?: () => void }) {
           args: [],
         });
 
-        const res = await fetch("/api/request/mint", {
+        const res = await fetch("/api/user/request-mint", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address }),

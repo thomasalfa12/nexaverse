@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: "Mint request submitted" });
   } catch (error) {
-    console.error("[POST /api/request/mint]", error);
+    console.error("[POST /api/user/request-mint]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

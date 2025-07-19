@@ -9,7 +9,7 @@ export async function GET() {
     });
     return NextResponse.json(requests);
   } catch (err) {
-    console.error("GET /api/admin/institutions error", err);
+    console.error("GET /api/admin/registry/institutions error", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(newReq);
   } catch (err) {
-    console.error("POST /api/admin/institutions error", err);
+    console.error("POST /api/admin/registry/institutions error", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

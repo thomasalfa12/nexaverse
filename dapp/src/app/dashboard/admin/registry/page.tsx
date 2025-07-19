@@ -43,8 +43,8 @@ export default function AdminPage() {
   const fetchInstitutionData = async () => {
     try {
       const [resPending, resRegistered] = await Promise.all([
-        fetch("/api/admin/register-institution"),
-        fetch("/api/admin/registered"),
+        fetch("/api/admin/registry/register-institution"),
+        fetch("/api/admin/registry/registered"),
       ]);
 
       const [pending, registered] = await Promise.all([
@@ -62,8 +62,8 @@ export default function AdminPage() {
 
   const fetchSBTRequests = async () => {
     try {
-      const res = await fetch("/api/admin/mint-request");
-      const approvedRes = await fetch("/api/admin/signed");
+      const res = await fetch("/api/admin/registry/mint-request");
+      const approvedRes = await fetch("/api/admin/registry/signed");
 
       const dbRequests: { id: number; Address: string; uri?: string }[] =
         await res.json();
@@ -125,7 +125,7 @@ export default function AdminPage() {
         args: [req.to, uri],
       });
 
-      const res = await fetch("/api/admin/approve", {
+      const res = await fetch("/api/admin/registry/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: req.to, tokenId, uri }),

@@ -80,7 +80,7 @@ export default function RegisterForm({ onSuccess }: Props) {
     const check = async () => {
       if (!address) return;
       try {
-        const res = await fetch(`/api/institution/check?wallet=${address}`);
+        const res = await fetch(`/api/user/address-check?wallet=${address}`);
         const data = await res.json();
         setIsAlreadyRegistered(data.registered);
         setSubmitted(data.submitted ?? false);
@@ -114,7 +114,7 @@ export default function RegisterForm({ onSuccess }: Props) {
       };
 
       try {
-        const res = await fetch("/api/admin/register-institution", {
+        const res = await fetch("/api/admin/registry/register-institution", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -170,7 +170,7 @@ export default function RegisterForm({ onSuccess }: Props) {
                 <Input
                   id="name"
                   name="name"
-                  placeholder="Contoh: Universitas Teknologi Nusantara"
+                  placeholder="Contoh: Nexaverse"
                   value={form.name}
                   onChange={handleFormChange}
                   required
@@ -186,7 +186,7 @@ export default function RegisterForm({ onSuccess }: Props) {
                 <Input
                   id="website"
                   name="website"
-                  placeholder="https://utn.ac.id"
+                  placeholder="https://nexaverse.xyz"
                   value={form.website}
                   onChange={handleFormChange}
                   required
@@ -203,7 +203,7 @@ export default function RegisterForm({ onSuccess }: Props) {
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="kontak@utn.ac.id"
+                  placeholder="nexaverse@mail.com"
                   value={form.email}
                   onChange={handleFormChange}
                   required
