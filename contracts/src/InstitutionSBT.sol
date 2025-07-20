@@ -1,35 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+
 
 interface IISBTRegistry {
     function isRegisteredInstitution(address) external view returns (bool);
     function owner() external view returns (address);
 }
+contract InstitutionSBT is ERC721, Ownable {
+    using Strings for uint256;
 
-contract InstitutionSBT is ERC721URIStorage, Ownable {
-    /* ========== STRUCTS ========== */
     struct MintRequest {
-        string uri;
+        bytes32 cid;
         bool approved;
         bool claimed;
     }
 
-    /* ========== STATE VARIABLES ========== */
     uint256 public tokenIdCounter;
     IISBTRegistry public immutable registry;
 
     mapping(address => MintRequest) public mintRequests;
     mapping(address => uint256) public claimedTokenId;
+    mapping(uint256 => bytes32) private _tokenCIDs;
 
-    /* ========== EVENTS ========== */
     event MintRequested(address indexed requester);
-    event MintApproved(address indexed requester, string uri);
-    event Minted(address indexed to, uint256 indexed tokenId, string uri);
+    event MintApproved(address indexed requester, bytes32 cid);
+    event Minted(address indexed to, uint256 indexed tokenId, bytes32 cid);
 
-    /* ========== CONSTRUCTOR ========== */
     constructor(
         address registry_,
         string memory name_,
@@ -40,15 +40,12 @@ contract InstitutionSBT is ERC721URIStorage, Ownable {
         require(registry.isRegisteredInstitution(initialOwner), "Owner not registered");
     }
 
-    /* ========== PUBLIC FUNCTIONS ========== */
-
-    /// @notice Request to mint an SBT
-      function requestMint() external {
-        require(registry.isRegisteredInstitution(msg.sender), "Not registered");
-        require(!mintRequests[msg.sender].claimed, "Already claimed");
+    function requestMint() external {
+        require(registry.isRegisteredInstitution(msg.sender), "Not a registered institution");
+        require(!mintRequests[msg.sender].claimed, "SBT already claimed");
 
         mintRequests[msg.sender] = MintRequest({
-            uri: "",
+            cid: bytes32(0),
             approved: false,
             claimed: false
         });
@@ -56,62 +53,79 @@ contract InstitutionSBT is ERC721URIStorage, Ownable {
         emit MintRequested(msg.sender);
     }
 
-    /// @notice Claim a previously approved SBT
-  function claim() external {
+    function claim() external {
         MintRequest storage request = mintRequests[msg.sender];
-        require(request.approved, "Not approved yet");
-        require(!request.claimed, "Already claimed");
-        require(bytes(request.uri).length > 0, "URI not set");
+        require(request.approved, "Request has not been approved yet");
+        require(!request.claimed, "SBT already claimed");
+        require(request.cid != bytes32(0), "Metadata CID has not been set by admin");
 
         uint256 tokenId = ++tokenIdCounter;
-        _safeMint(msg.sender, tokenId);
-        _setTokenURI(tokenId, request.uri);
+        _mint(msg.sender, tokenId);
+
+        _tokenCIDs[tokenId] = request.cid;
 
         request.claimed = true;
         claimedTokenId[msg.sender] = tokenId;
 
-        emit Minted(msg.sender, tokenId, request.uri);
+        emit Minted(msg.sender, tokenId, request.cid);
     }
 
+    function approveMintRequest(address to, bytes32 cid) external onlyOwner {
+        require(registry.isRegisteredInstitution(to), "Recipient is not a registered institution");
+        require(!mintRequests[to].approved, "Request already approved");
+        require(!mintRequests[to].claimed, "SBT already claimed by this address");
+        require(cid != bytes32(0), "CID cannot be empty");
 
-    /* ========== ADMIN FUNCTIONS ========== */
-
-    /// @notice Admin approves mint request
-     function approveMintRequest(address to, string memory uri) external onlyOwner {
-        require(registry.isRegisteredInstitution(to), "Not registered");
-        require(!mintRequests[to].approved, "Already approved");
-        require(!mintRequests[to].claimed, "Already claimed");
-
-        mintRequests[to].uri = uri;
+        mintRequests[to].cid = cid;
         mintRequests[to].approved = true;
 
-        emit MintApproved(to, uri);
+        emit MintApproved(to, cid);
     }
 
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        require(_ownerOf(tokenId) != address(0), "ERC721: URI query for nonexistent token");
 
-    /// @notice Transfer ownership only to registered institution
+        bytes32 cid = _tokenCIDs[tokenId];
+        require(cid != bytes32(0), "ERC721: Token URI not set");
+
+        return string(abi.encodePacked("ipfs://", _bytes32ToHexString(cid)));
+    }
+
+    function _bytes32ToHexString(bytes32 _bytes) private pure returns (string memory) {
+        bytes memory buffer = new bytes(64);
+        for (uint i = 0; i < 32; i++) {
+            buffer[i*2] = _toHexDigit(uint8(_bytes[i] >> 4));
+            buffer[i*2+1] = _toHexDigit(uint8(_bytes[i] & 0x0f));
+        }
+        return string(abi.encodePacked("0x", buffer));
+    }
+
+    function _toHexDigit(uint8 _digit) private pure returns (bytes1) {
+        if (_digit < 10) {
+            return bytes1(uint8(bytes1('0')) + _digit);
+        } else {
+            return bytes1(uint8(bytes1('a')) + _digit - 10);
+        }
+    }
+
     function transferOwnership(address newOwner) public override onlyOwner {
         require(registry.isRegisteredInstitution(newOwner), "New owner not registered");
         super.transferOwnership(newOwner);
     }
-
-    /* ========== SOULBOUND LOGIC ========== */
-
-    /// @notice Prevent token transfer (non-transferable SBT)
+    
+    // FIX: Mengembalikan signature `_update` ke bentuk yang benar dengan 3 parameter.
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
-        address from = super._ownerOf(tokenId);
+        address from = _ownerOf(tokenId);
+        
         require(from == address(0) || to == address(0), "SBT: non-transferable");
+        
         return super._update(to, tokenId, auth);
     }
 
-    /* ========== BURN FUNCTION ========== */
-
-    /// @notice Registry owner can burn a user's SBT
     function burnSBT(address user) external {
         require(msg.sender == registry.owner(), "Only registry owner");
-
         uint256 tokenId = claimedTokenId[user];
-        if (_ownerOf(tokenId) == user) {
+        if (ownerOf(tokenId) == user) {
             _burn(tokenId);
         }
     }

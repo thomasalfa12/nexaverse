@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   useAccount,
   usePublicClient,
@@ -22,11 +22,13 @@ import type { Institution } from "@prisma/client"; // Tipe ini dibutuhkan
 // REMOVED: SBTRequest tidak lagi ada
 // import type { SBTRequest } from "@/components/admin/RequestSBTTable";
 import { toast } from "sonner";
+import { approveSbt } from "@/lib/server/approveSbtAction";
 
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const [isApproving, startApproveTransition] = useTransition();
 
   const { data: owner } = useReadContract({
     address: contracts.registry.address,
@@ -147,53 +149,25 @@ export default function AdminPage() {
   };
 
   const handleApprove = async (req: SbtMintWithInstitution) => {
-    if (!publicClient) {
-      toast.error("Gagal terhubung ke provider blockchain.");
-      return;
-    }
+    // Gunakan useTransition untuk UI yang non-blocking
+    startApproveTransition(async () => {
+      const toastId = toast.loading("Memulai proses persetujuan otomatis...");
 
-    const uri = prompt("Masukkan URI metadata (ipfs://...)", req.uri || "");
-    if (!uri) return toast.error("URI tidak boleh kosong.");
+      // Panggil Server Action yang cerdas
+      const result = await approveSbt(req);
 
-    try {
-      toast.info("Silakan konfirmasi transaksi persetujuan di wallet...");
-      const txHash = await writeContractAsync({
-        address: contracts.institution.address,
-        abi: contracts.institution.abi,
-        functionName: "approveMintRequest",
-        args: [req.institution.walletAddress, uri],
-      });
-
-      toast.loading("Transaksi persetujuan dikirim, menunggu konfirmasi...", {
-        id: "sbt-approve-tx",
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
-      });
-      if (receipt.status === "reverted")
-        throw new Error("Transaksi on-chain gagal.");
-
-      toast.dismiss("sbt-approve-tx");
-      toast.success("Persetujuan on-chain berhasil!");
-
-      await fetch("/api/admin/registry/finalize-sbt-approval", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sbtMintId: req.id, uri, txHash }),
-      });
-
-      toast.success("✅ Persetujuan SBT berhasil disinkronkan!");
-      fetchSBTRequests();
-    } catch (err: unknown) {
-      toast.dismiss("sbt-approve-tx");
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Terjadi kesalahan tidak diketahui.";
-      console.error("[handleApprove]", err);
-      toast.error(errorMessage);
-    }
+      // Tangani hasilnya untuk memberikan feedback ke admin
+      if (result.success) {
+        toast.success("✅ Proses persetujuan selesai dan tersinkronisasi!", {
+          id: toastId,
+        });
+        fetchSBTRequests(); // Refresh data di tabel
+      } else {
+        toast.error(result.error || "Proses persetujuan otomatis gagal.", {
+          id: toastId,
+        });
+      }
+    });
   };
 
   if (!isConnected) {
@@ -228,7 +202,12 @@ export default function AdminPage() {
 
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-2">🖊️ Permintaan Mint SBT</h2>
-        <RequestSBTTable requests={sbtRequests} onApprove={handleApprove} />
+        <RequestSBTTable
+          requests={sbtRequests}
+          onApprove={handleApprove}
+          // FIX: Teruskan state isApproving ke komponen anak
+          isProcessing={isApproving}
+        />
       </section>
 
       <section>

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getVerifyStatus, VerifyStatus } from "@/lib/server/verify";
 import RegisterForm from "./RegisterForm";
 import { RequestMintForm } from "./RequestMintForm";
-import { ClaimSBTButton } from "./ClaimSBTButton";
+import { ClaimSBTButton } from "./ClaimSBTPreview";
 import {
   Table,
   TableHeader,
@@ -19,7 +19,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Modifikasi pada 'Row' untuk menjadi 'TimelineRow' yang lebih visual
+// Komponen untuk setiap baris di timeline visual
 function TimelineRow({
   step,
   icon: Icon,
@@ -74,7 +74,7 @@ function TimelineRow({
   );
 }
 
-// StatusBox tetap sama, mungkin dengan sedikit penyesuaian gaya
+// Komponen untuk kotak status
 function StatusBox({ text, success }: { text: string; success?: boolean }) {
   const variant = success ? "success" : "default";
   return (
@@ -91,15 +91,15 @@ function StatusBox({ text, success }: { text: string; success?: boolean }) {
   );
 }
 
+// Komponen utama
 export default function VerifyProgressTable() {
   const [status, setStatus] = useState<VerifyStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const { address } = useAccount();
 
-  // --- LOGIKA FETCHING DATA ANDA - TIDAK DIUBAH SAMA SEKALI ---
   useEffect(() => {
     if (!address) {
-      setLoading(false); // Pastikan loading berhenti jika tidak ada address
+      setLoading(false);
       return;
     }
 
@@ -136,7 +136,7 @@ export default function VerifyProgressTable() {
     );
   }
 
-  // Tampilan jika data status gagal diambil (penting untuk UX)
+  // Tampilan jika data status gagal diambil
   if (!status) {
     return (
       <div className="p-6 text-center border-2 border-dashed rounded-lg text-red-500">
@@ -145,11 +145,9 @@ export default function VerifyProgressTable() {
     );
   }
 
-  // --- STRUKTUR RENDER DENGAN LOGIKA ASLI ANDA ---
   return (
     <Card className="p-0 sm:p-4 bg-white shadow-xl shadow-gray-200/50 rounded-2xl">
       <Table className="border-separate border-spacing-0">
-        {/* Header sengaja disembunyikan untuk tampilan timeline */}
         <TableHeader className="hidden">
           <TableRow>
             <TableHead>Langkah</TableHead>
@@ -158,7 +156,7 @@ export default function VerifyProgressTable() {
         </TableHeader>
 
         <TableBody>
-          {/* --- BLOK LOGIKA 1: REGISTER --- (Tidak diubah) */}
+          {/* --- BLOK 1: REGISTER --- */}
           <TimelineRow
             step="1. Register Institusi"
             icon={Building}
@@ -177,14 +175,14 @@ export default function VerifyProgressTable() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                   >
-                    <RegisterForm onSuccess={() => location.reload()} />
+                    <RegisterForm onSuccess={() => window.location.reload()} />
                   </motion.div>
                 </AnimatePresence>
               </TableCell>
             </TableRow>
           )}
 
-          {/* --- BLOK LOGIKA 2: REQUEST MINT --- (Tidak diubah) */}
+          {/* --- BLOK 2: REQUEST MINT --- */}
           <TimelineRow
             step="2. Request Mint SBT"
             icon={FileText}
@@ -203,14 +201,16 @@ export default function VerifyProgressTable() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                   >
-                    <RequestMintForm onSuccess={() => location.reload()} />
+                    <RequestMintForm
+                      onSuccess={() => window.location.reload()}
+                    />
                   </motion.div>
                 </AnimatePresence>
               </TableCell>
             </TableRow>
           )}
 
-          {/* --- BLOK LOGIKA 3: PERSETUJUAN --- (Tidak diubah) */}
+          {/* --- BLOK 3: PERSETUJUAN --- */}
           <TimelineRow
             step="3. Persetujuan Admin"
             icon={UserCheck}
@@ -228,7 +228,7 @@ export default function VerifyProgressTable() {
             </TableRow>
           )}
 
-          {/* --- BLOK LOGIKA 4: KLAIM TOKEN --- (Tidak diubah) */}
+          {/* --- BLOK 4: KLAIM TOKEN --- */}
           <TimelineRow
             step="4. Klaim Token"
             icon={Award}
@@ -248,7 +248,11 @@ export default function VerifyProgressTable() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                     >
-                      <ClaimSBTButton onSuccess={() => location.reload()} />
+                      {/* FIX: Meneruskan sbtUri sebagai prop ke komponen ClaimSBTButton */}
+                      <ClaimSBTButton
+                        onSuccess={() => window.location.reload()}
+                        sbtUri={status.sbtUri}
+                      />
                     </motion.div>
                   </AnimatePresence>
                 ) : (

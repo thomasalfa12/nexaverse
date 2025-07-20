@@ -1,21 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack: (config) => {
-    // Jangan bundel modul ini di browser
+    // Konfigurasi webpack Anda tetap sama
     config.resolve.alias["pino-pretty"] = false;
     return config;
   },
   images: {
-   
+    // PERBAIKAN 1: Izinkan pemuatan SVG dari remote URL
+    dangerouslyAllowSVG: true,
+    
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "picsum.photos",
+        hostname: 'ipfs.io',
         port: "",
-        pathname: "/**", // semua path
+        pathname: '/ipfs/**',
       },
     ],
-    domains: ["images.unsplash.com"],
+    // PERBAIKAN 2: Hapus kunci 'domains' yang sudah usang
   },
 };
+
 module.exports = nextConfig;

@@ -1,6 +1,6 @@
 {
-  "ISBTRegistry": "0x7c3DbC75ECF4E74Fa5053499cc4EDd25Ff65b7Cf",
-  "InstitutionSBT": "0x0C25c6bC165854a4cB0eAFADAE0CA8071059bD9c",
   "network": "baseSepolia",
-  "deployedAt": "2025-07-18T02:57:28.712Z"
+  "ISBTRegistry": "0xB2e1f0946444a313da421a7b562cCA5e2248Bc4f",
+  "InstitutionSBT": "0x639bB9956f204685547B974DB860324925136c9E",
+  "deployedAt": "2025-07-19T16:09:12.952Z"
 }

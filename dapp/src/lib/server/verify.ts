@@ -12,6 +12,7 @@ export type VerifyStatus = {
   requested: boolean;
   approved: boolean;
   claimed: boolean;
+  sbtUri?: string | null;
 };
 
 /**
@@ -52,6 +53,7 @@ export async function getVerifyStatus(address: `0x${string}`): Promise<VerifySta
       
       // 'claimed' jika status di SbtMint adalah CLAIMED.
       claimed: sbtRequest?.status === SbtStatus.CLAIMED,
+      sbtUri: sbtRequest?.uri, 
     };
   } catch (err) {
     console.error("[getVerifyStatus] error:", err);
