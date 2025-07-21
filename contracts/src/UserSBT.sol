@@ -13,7 +13,7 @@ contract UserSBT is ERC721URIStorage, Ownable, Pausable {
     uint256 public tokenIdCounter;
     IISBTRegistry public immutable registry;
 
-    struct SBTData { address issuer; uint256 expiry; } // 0 = permanen
+    struct SBTData { address issuer; uint256 expiry; } // 0 = permanenanal
     mapping(address => uint256) public ownedToken;     // user → tokenId
     mapping(uint256 => SBTData) public sbtMetadata;    // tokenId → data
     mapping(address => address) public issuedBy;       // user → issuer

@@ -9,12 +9,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum RegistrationStatus {
-  PENDING
-  REGISTERED
-  REJECTED // Opsional, untuk masa depan jika Anda ingin menolak permintaan
-}
-
 enum SbtStatus {
   PENDING
   APPROVED
@@ -22,27 +16,30 @@ enum SbtStatus {
   REJECTED
 }
 
+enum SbtLifecycleStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
 // GANTI InstitutionRequest & InstitutionList DENGAN INI
-model Institution {
+model VerifiedEntity {
   id              Int      @id @default(autoincrement())
   name            String
   officialWebsite String
-  contactEmail    String
-  institutionType Int
   walletAddress   String   @unique
   createdAt       DateTime @default(now())
-
-  // Kolom baru yang krusial
   status             RegistrationStatus @default(PENDING)
   registrationTxHash String?
   registeredAt       DateTime?
   SbtMint            SbtMint?
+  issuedSbts CuratedSbt[]
 }
 
 model SbtMint {
   id            String      @id @default(cuid())
-  institutionId Int         @unique // Pastikan setiap institusi hanya bisa punya satu permintaan SBT
-  institution   Institution @relation(fields: [institutionId], references: [id])
+  entityId      Int         @unique // Pastikan setiap institusi hanya bisa punya satu permintaan SBT
+  entity        Institution @relation(fields: [institutionId], references: [id])
   status        SbtStatus   @default(PENDING)
 
   tokenId        Int?      @unique
@@ -56,4 +53,61 @@ model SbtMint {
   requestTxHash String? // Simpan bukti permintaan on-chain
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+// Data profil pengguna yang bisa diedit.
+model Profile {
+  id                 String      @id @default(cuid())
+  walletAddress      String      @unique
+  name               String?
+  bio                String?
+  // ...
+  curatedSbts        CuratedSbt[]
+}
+
+// "Blueprint" untuk kredensial yang dibuat oleh VerifiedEntity.
+model CredentialTemplate {
+  id                String @id @default(cuid())
+  title             String
+  description       String
+  imageUrl          String
+  contractAddress   String @unique // Alamat kontrak UserSBT yang di-deploy untuk template ini
+
+  creatorId         Int
+  creator           VerifiedEntity @relation(fields: [creatorId], references: [id])
+
+  eligibilityList   EligibilityRecord[]
+  issuedSbts        CuratedSbt[]
+}
+
+// Daftar kelayakan skala besar untuk setiap template.
+model EligibilityRecord {
+  id                  String @id @default(cuid())
+  userWalletAddress   String
+  status              String @default("ELIGIBLE") // ELIGIBLE, CLAIMED
+
+  templateId          String
+  template            CredentialTemplate @relation(fields: [templateId], references: [id])
+
+  @@unique([templateId, userWalletAddress])
+}
+
+// Cerminan off-chain dari aset on-chain, diisi oleh Event Listener.
+model CuratedSbt {
+  id                 String   @id @default(cuid())
+  tokenId            String
+  status             SbtLifecycleStatus @default(ACTIVE)
+  expiresAt          DateTime?
+  // ... metadata yang di-cache
+
+  // Relasi untuk konteks
+  ownerProfileId     String
+  owner              Profile @relation(fields: [ownerProfileId], references: [id])
+  
+  templateId         String
+  template           CredentialTemplate @relation(fields: [templateId], references: [id])
+
+  issuerId           Int
+  issuer             VerifiedEntity @relation(fields: [issuerId], references: [id])
+  
+  @@unique([templateId, tokenId])
 }

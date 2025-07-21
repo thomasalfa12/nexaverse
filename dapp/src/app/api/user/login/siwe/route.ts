@@ -1,7 +1,23 @@
-// src/app/api/siwe/route.ts
+// src/app/api/user/login/siwe/route.ts
+
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { recoverMessageAddress } from "viem";
+import { recoverMessageAddress, createPublicClient, http } from "viem";
+import { baseSepolia } from "viem/chains";
+import jwt from "jsonwebtoken";
+
+import { contracts } from "@/lib/contracts";
+
+const JWT_SECRET = process.env.JWT_SECRET;
+// Pengecekan awal ini bagus untuk menghentikan server saat startup jika tidak ada secret
+if (!JWT_SECRET) {
+  throw new Error("Mohon definisikan JWT_SECRET di .env.local");
+}
+
+const viemClient = createPublicClient({
+  chain: baseSepolia,
+  transport: http(process.env.NEXT_PUBLIC_RPC_URL),
+});
 
 function genNonce() {
   return [...crypto.getRandomValues(new Uint8Array(6))]
@@ -9,43 +25,59 @@ function genNonce() {
     .join("");
 }
 
-/* ---------------------  GET /api/siwe   --------------------- */
 export async function GET() {
   const nonce = genNonce();
-
-  /* buat respons + tulis cookie di sana */
   const res = NextResponse.json({ nonce });
-  res.cookies.set("nexa_nonce", nonce, {
-    httpOnly: true,
-    maxAge: 300,
-    sameSite: "lax",
-  });
+  res.cookies.set("nexa_nonce", nonce, { httpOnly: true, maxAge: 300, sameSite: "lax" });
   return res;
 }
 
-/* ---------------------  POST /api/siwe  --------------------- */
 export async function POST(req: Request) {
-  const { message, signature } = await req.json();
+  try {
+    const { message, signature } = await req.json();
+    const nonce = (await cookies()).get("nexa_nonce")?.value;
 
-  /* ⬇️  baca cookie permintaan */
-  const reqCookies = await cookies();        // <- pakai await
-  const nonce = reqCookies.get("nexa_nonce")?.value;
+    if (!nonce || !message.includes(nonce)) {
+      return NextResponse.json({ ok: false, error: "Invalid nonce" }, { status: 400 });
+    }
 
-  if (!nonce || !message.includes(nonce))
-    return NextResponse.json({ ok: false }, { status: 400 });
+    const addr = await recoverMessageAddress({ message, signature });
 
-  const addr = await recoverMessageAddress({ message, signature });
+    const roles: string[] = [];
+    const owner = await viemClient.readContract({
+      address: contracts.registry.address,
+      abi: contracts.registry.abi,
+      functionName: 'owner',
+    }) as `0x${string}`;
 
-  /* set session + hapus nonce di objek respons */
-  const isProd = process.env.NODE_ENV === "production";
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set("nexa_session", addr, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24,
-    path: "/",
-  });
-  res.cookies.delete("nexa_nonce");
-  return res;
+    if (addr.toLowerCase() === owner.toLowerCase()) {
+      roles.push("REGISTRY_ADMIN");
+    }
+
+    // FIX: Tambahkan pengecekan ini di dalam fungsi untuk meyakinkan TypeScript
+    if (!JWT_SECRET) {
+      throw new Error("JWT_SECRET is not defined.");
+    }
+
+    const tokenPayload = { address: addr, roles };
+    // Sekarang `JWT_SECRET` di sini dijamin sebuah string
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
+    
+    const isProd = process.env.NODE_ENV === "production";
+    const res = NextResponse.json({ ok: true });
+    
+    res.cookies.set("nexa_session", token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+    res.cookies.delete("nexa_nonce");
+
+    return res;
+  } catch (error) {
+    console.error("SIWE Login Error:", error);
+    return NextResponse.json({ ok: false, error: "Internal Server Error" }, { status: 500 });
+  }
 }
