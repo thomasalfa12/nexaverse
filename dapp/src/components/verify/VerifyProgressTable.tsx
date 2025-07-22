@@ -19,7 +19,6 @@ import {
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Komponen untuk setiap baris di timeline visual
 function TimelineRow({
   step,
   icon: Icon,
@@ -35,33 +34,32 @@ function TimelineRow({
     ? "text-green-500"
     : isActive
     ? "text-blue-500"
-    : "text-gray-400";
+    : "text-gray-400 dark:text-gray-500";
   const ringColor = done
     ? "ring-green-500"
     : isActive
     ? "ring-blue-500"
-    : "ring-gray-300";
+    : "ring-border";
 
   return (
     <TableRow className="border-b-0 hover:bg-transparent">
-      {/* Kolom Ikon dan Garis Timeline */}
       <TableCell className="w-16 align-top pt-5 pr-0">
         <div className="flex flex-col items-center h-full">
+          {/* PERBAIKAN: Mengganti bg-white dengan bg-background agar sesuai tema */}
           <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center bg-white ring-2 ${ringColor} z-10`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center bg-background ring-2 ${ringColor} z-10`}
           >
             <Icon className={`h-5 w-5 ${statusColor}`} />
           </div>
-          {/* Garis vertikal */}
-          <div className="w-0.5 flex-grow bg-gray-200 mt-1"></div>
+          {/* PERBAIKAN: Mengganti bg-gray-200 dengan bg-border */}
+          <div className="w-0.5 flex-grow bg-border mt-1"></div>
         </div>
       </TableCell>
-
-      {/* Kolom Judul dan Status */}
       <TableCell className="align-top pt-5 pl-4">
+        {/* PERBAIKAN: Menggunakan text-foreground dan text-muted-foreground */}
         <h3
           className={`font-bold text-lg ${
-            done || isActive ? "text-gray-800" : "text-gray-500"
+            done || isActive ? "text-foreground" : "text-muted-foreground"
           }`}
         >
           {step}
@@ -74,24 +72,15 @@ function TimelineRow({
   );
 }
 
-// Komponen untuk kotak status
 function StatusBox({ text, success }: { text: string; success?: boolean }) {
-  const variant = success ? "success" : "default";
+  // Komponen Alert dari shadcn sudah cukup theme-aware, tidak perlu diubah.
   return (
-    <Alert
-      variant={variant}
-      className={`${
-        success
-          ? "bg-green-50 border-green-500 text-green-800"
-          : "bg-blue-50 border-blue-500 text-blue-800"
-      }`}
-    >
+    <Alert variant={success ? "success" : "default"}>
       <AlertDescription>{text}</AlertDescription>
     </Alert>
   );
 }
 
-// Komponen utama
 export default function VerifyProgressTable() {
   const [status, setStatus] = useState<VerifyStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +91,6 @@ export default function VerifyProgressTable() {
       setLoading(false);
       return;
     }
-
     const fetchStatus = async () => {
       setLoading(true);
       try {
@@ -114,39 +102,34 @@ export default function VerifyProgressTable() {
         setLoading(false);
       }
     };
-
     fetchStatus();
   }, [address]);
 
-  // Tampilan Loading
   if (loading) {
     return (
       <div className="flex items-center justify-center p-10">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
-
-  // Tampilan jika wallet tidak terhubung
   if (!address) {
     return (
-      <div className="p-6 text-center border-2 border-dashed rounded-lg text-gray-500">
+      <div className="p-6 text-center border-2 border-dashed rounded-lg text-muted-foreground">
         Silakan hubungkan wallet Anda untuk memulai proses verifikasi.
       </div>
     );
   }
-
-  // Tampilan jika data status gagal diambil
   if (!status) {
     return (
-      <div className="p-6 text-center border-2 border-dashed rounded-lg text-red-500">
+      <div className="p-6 text-center border-2 border-dashed rounded-lg text-destructive">
         Gagal memuat status verifikasi. Silakan coba lagi.
       </div>
     );
   }
 
   return (
-    <Card className="p-0 sm:p-4 bg-white shadow-xl shadow-gray-200/50 rounded-2xl">
+    // PERBAIKAN: Menghapus bg-white dan shadow hardcoded, biarkan Card default yang bekerja
+    <Card className="p-0 sm:p-4">
       <Table className="border-separate border-spacing-0">
         <TableHeader className="hidden">
           <TableRow>
@@ -154,9 +137,7 @@ export default function VerifyProgressTable() {
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
-
         <TableBody>
-          {/* --- BLOK 1: REGISTER --- */}
           <TimelineRow
             step="1. Register Institusi"
             icon={Building}
@@ -166,7 +147,7 @@ export default function VerifyProgressTable() {
           {!status.registered && (
             <TableRow className="border-b-0 hover:bg-transparent">
               <TableCell className="w-16 pr-0">
-                <div className="w-0.5 h-full bg-gray-200 mx-auto"></div>
+                <div className="w-0.5 h-full bg-border mx-auto"></div>
               </TableCell>
               <TableCell className="pb-8 pl-4">
                 <AnimatePresence>
@@ -182,7 +163,6 @@ export default function VerifyProgressTable() {
             </TableRow>
           )}
 
-          {/* --- BLOK 2: REQUEST MINT --- */}
           <TimelineRow
             step="2. Request Mint SBT"
             icon={FileText}
@@ -192,7 +172,7 @@ export default function VerifyProgressTable() {
           {status.registered && !status.requested && (
             <TableRow className="border-b-0 hover:bg-transparent">
               <TableCell className="w-16 pr-0">
-                <div className="w-0.5 h-full bg-gray-200 mx-auto"></div>
+                <div className="w-0.5 h-full bg-border mx-auto"></div>
               </TableCell>
               <TableCell className="pb-8 pl-4">
                 <AnimatePresence>
@@ -210,7 +190,6 @@ export default function VerifyProgressTable() {
             </TableRow>
           )}
 
-          {/* --- BLOK 3: PERSETUJUAN --- */}
           <TimelineRow
             step="3. Persetujuan Admin"
             icon={UserCheck}
@@ -220,7 +199,7 @@ export default function VerifyProgressTable() {
           {status.requested && !status.approved && (
             <TableRow className="border-b-0 hover:bg-transparent">
               <TableCell className="w-16 pr-0">
-                <div className="w-0.5 h-full bg-gray-200 mx-auto"></div>
+                <div className="w-0.5 h-full bg-border mx-auto"></div>
               </TableCell>
               <TableCell className="pb-8 pl-4">
                 <StatusBox text="Menunggu persetujuan dari admin..." />
@@ -228,7 +207,6 @@ export default function VerifyProgressTable() {
             </TableRow>
           )}
 
-          {/* --- BLOK 4: KLAIM TOKEN --- */}
           <TimelineRow
             step="4. Klaim Token"
             icon={Award}
@@ -238,7 +216,7 @@ export default function VerifyProgressTable() {
           {status.approved && (
             <TableRow className="border-b-0 hover:bg-transparent">
               <TableCell className="w-16 pr-0">
-                <div className="w-0.5 h-full bg-gray-200 mx-auto"></div>
+                <div className="w-0.5 h-full bg-border mx-auto"></div>
               </TableCell>
               <TableCell className="pb-8 pl-4">
                 {!status.claimed ? (
@@ -248,7 +226,6 @@ export default function VerifyProgressTable() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                     >
-                      {/* FIX: Meneruskan sbtUri sebagai prop ke komponen ClaimSBTButton */}
                       <ClaimSBTButton
                         onSuccess={() => window.location.reload()}
                         sbtUri={status.sbtCid}

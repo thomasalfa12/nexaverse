@@ -2,14 +2,17 @@ import VerifyProgressTable from "@/components/verify/VerifyProgressTable";
 
 export default function VerifyPage() {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8">
+    // PERBAIKAN: Menghapus kelas warna hardcoded dari <main>
+    <main className="max-w-4xl mx-auto px-4 py-8">
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Verifikasi Institusi
+        {/* PERBAIKAN: Mengganti text-gray-900 dengan text-foreground */}
+        <h1 className="text-3xl font-bold text-foreground">
+          Verifikasi Entitas
         </h1>
-        <p className="text-gray-600 text-sm">
-          Silakan ikuti langkah-langkah berikut untuk memverifikasi institusi
-          Anda dan mengklaim Soulbound Token (SBT).
+        {/* PERBAIKAN: Mengganti text-gray-600 dengan text-muted-foreground */}
+        <p className="text-muted-foreground text-sm">
+          Silakan ikuti langkah-langkah berikut untuk memverifikasi entitas Anda
+          dan mengklaim Soulbound Token (SBT).
         </p>
         <VerifyProgressTable />
       </div>

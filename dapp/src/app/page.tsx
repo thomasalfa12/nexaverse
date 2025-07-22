@@ -1,16 +1,15 @@
 // src/app/page.tsx
 "use client";
 
-// PERBAIKAN: Menambahkan useState ke dalam impor React
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSiweLogin } from "@/lib/walletProviders/useSiweLogin";
 import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import * as THREE from "three";
+import { cn } from "@/lib/utils";
+// UI & Animasi
 import { motion, AnimatePresence } from "framer-motion";
-
-// Shadcn UI & Icons
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,26 +19,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import DarkModeToggle from "@/components/ui/DarkModeToggle";
+
 import {
   Chrome,
   Loader2,
   LogIn,
   ShieldCheck,
-  Star,
-  KeyRound,
+  PenTool,
+  Users,
 } from "lucide-react";
-import DarkModeToggle from "@/components/ui/DarkModeToggle";
 
-// Komponen baru untuk animasi 3D di sisi kiri
+// ============================================================================
+// --- KOMPONEN VISUAL (TIDAK BERUBAH) ---
+// ============================================================================
+
 const InteractiveHero = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!mountRef.current) return;
-
     const currentMount = mountRef.current;
-
-    // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       75,
@@ -50,144 +49,90 @@ const InteractiveHero = () => {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     currentMount.appendChild(renderer.domElement);
-
-    camera.position.z = 5;
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
-    scene.add(ambientLight);
-    const pointLight = new THREE.PointLight(0x87ceeb, 2, 100); // Sky blue light
-    pointLight.position.set(0, 0, 2);
-    scene.add(pointLight);
-
-    // Central Identity Core
-    const coreGeometry = new THREE.IcosahedronGeometry(0.5, 1);
-    const coreMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0077ff,
-      emissive: 0x0077ff,
-      emissiveIntensity: 1,
-      metalness: 0.5,
-      roughness: 0.4,
-    });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    scene.add(core);
-
-    // Orbiting Credential Cards
-    const cards: THREE.Mesh[] = [];
-    const cardCount = 8;
-    const cardGeometry = new THREE.BoxGeometry(1, 0.6, 0.05);
-    for (let i = 0; i < cardCount; i++) {
-      const cardMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        metalness: 0.8,
-        roughness: 0.2,
-        side: THREE.DoubleSide,
-      });
-      const card = new THREE.Mesh(cardGeometry, cardMaterial);
-      const angle = (i / cardCount) * Math.PI * 2;
-      const radius = 2.5;
-      card.position.x = Math.cos(angle) * radius;
-      card.position.y = Math.sin(angle) * radius;
-      card.lookAt(core.position);
-      scene.add(card);
-      cards.push(card);
-    }
-
-    // Starfield
-    const starsGeometry = new THREE.BufferGeometry();
-    const starsCount = 5000;
-    const posArray = new Float32Array(starsCount * 3);
-    for (let i = 0; i < starsCount * 3; i++) {
+    camera.position.z = 10;
+    const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x444444);
+    gridHelper.rotation.x = Math.PI / 2;
+    scene.add(gridHelper);
+    const particleCount = 2000;
+    const particlesGeometry = new THREE.BufferGeometry();
+    const posArray = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i++) {
       posArray[i] = (Math.random() - 0.5) * 20;
     }
-    starsGeometry.setAttribute(
+    particlesGeometry.setAttribute(
       "position",
       new THREE.BufferAttribute(posArray, 3)
     );
-    const starsMaterial = new THREE.PointsMaterial({
-      size: 0.005,
-      color: 0xffffff,
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.05,
+      color: 0x3b82f6,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.8,
     });
-    const starMesh = new THREE.Points(starsGeometry, starsMaterial);
-    scene.add(starMesh);
-
-    // Mouse move interaction
+    const particleMesh = new THREE.Points(particlesGeometry, particleMaterial);
+    scene.add(particleMesh);
     const mouse = new THREE.Vector2();
     const handleMouseMove = (event: MouseEvent) => {
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const rect = currentMount.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    window.addEventListener("mousemove", handleMouseMove);
-
-    // Animation loop
+    currentMount.addEventListener("mousemove", handleMouseMove);
     const animate = () => {
       requestAnimationFrame(animate);
-      core.rotation.y += 0.005;
-      core.rotation.x += 0.002;
-
-      cards.forEach((card, i) => {
-        const angle = (i / cardCount) * Math.PI * 2 + Date.now() * 0.0002;
-        const radius = 2.5;
-        card.position.x = Math.cos(angle) * radius;
-        card.position.z = Math.sin(angle) * radius;
-        card.lookAt(core.position);
-      });
-
-      // Parallax effect
-      camera.position.x += (mouse.x * 0.5 - camera.position.x) * 0.02;
-      camera.position.y += (mouse.y * 0.5 - camera.position.y) * 0.02;
+      const positions = particleMesh.geometry.attributes.position
+        .array as Float32Array;
+      for (let i = 1; i < particleCount * 3; i += 3) {
+        positions[i] -= 0.01;
+        if (positions[i] < -10) {
+          positions[i] = 10;
+        }
+      }
+      particleMesh.geometry.attributes.position.needsUpdate = true;
+      camera.position.x += (mouse.x * 2 - camera.position.x) * 0.02;
+      camera.position.y += (mouse.y * 2 - camera.position.y) * 0.02;
       camera.lookAt(scene.position);
-
       renderer.render(scene, camera);
     };
     animate();
-
-    // Handle resize
     const handleResize = () => {
       camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     };
     window.addEventListener("resize", handleResize);
-
-    // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
-      window.removeEventListener("mousemove", handleMouseMove);
+      currentMount.removeEventListener("mousemove", handleMouseMove);
       if (currentMount) {
         currentMount.removeChild(renderer.domElement);
       }
     };
   }, []);
-
-  return <div ref={mountRef} className="h-full w-full" />;
+  return <div ref={mountRef} className="absolute inset-0 z-0 h-full w-full" />;
 };
 
-// Komponen baru untuk animasi teks fitur
 const FeatureCarousel = () => {
   const features = [
-    { text: "Kelola Kredensial Digital Anda", icon: Star },
-    { text: "Amankan Identitas On-Chain Anda", icon: ShieldCheck },
-    { text: "Buka Akses Eksklusif", icon: KeyRound },
+    { text: "Ciptakan Warisan Digital Anda", icon: PenTool },
+    { text: "Verifikasi Kreasi Unik Anda", icon: ShieldCheck },
+    { text: "Libatkan Komunitas Anda", icon: Users },
   ];
   const [index, setIndex] = useState(0);
-
   useEffect(() => {
     const timer = setInterval(() => {
-      // PERBAIKAN: Menambahkan tipe 'number' pada parameter
-      setIndex((prevIndex: number) => (prevIndex + 1) % features.length);
+      setIndex((prevIndex) => (prevIndex + 1) % features.length);
     }, 4000);
     return () => clearInterval(timer);
   }, [features.length]);
-
   const CurrentIcon = features[index].icon;
-
   return (
     <div className="relative z-10 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600/20 backdrop-blur-sm border border-blue-500/30 mx-auto">
-        <CurrentIcon className="h-8 w-8 text-blue-400" />
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 mx-auto shadow-lg">
+        <CurrentIcon className="h-8 w-8 text-white" />
       </div>
-      <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-gray-400">
+      <h1 className="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-gray-400">
         Nexaverse
       </h1>
       <div className="mt-4 h-8">
@@ -208,8 +153,10 @@ const FeatureCarousel = () => {
   );
 };
 
+// ============================================================================
+// --- KOMPONEN UTAMA (DIRESTRUKTURISASI UNTUK RESPONSIVE) ---
+// ============================================================================
 export default function Home() {
-  // --- SEMUA LOGIKA HOOKS ANDA TETAP SAMA ---
   const router = useRouter();
   const { login: signAndContinue, loading: siweLoading } = useSiweLogin();
   const {
@@ -226,24 +173,43 @@ export default function Home() {
   }, [ready, isLoggedIn, router]);
 
   return (
-    <main className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-2">
-      {/* LEFT – Hero Section (REDESIGNED) */}
-      <section className="relative hidden flex-col items-center justify-center bg-black p-10 text-white lg:flex">
-        <div className="absolute inset-0 z-0">
-          <InteractiveHero />
-        </div>
+    <main className="flex min-h-screen w-full flex-col lg:flex-row">
+      {/* KIRI – Hero Section (HANYA TAMPIL DI DESKTOP) */}
+      <section className="relative hidden basis-1/2 flex-col items-center justify-center bg-black p-10 text-white lg:flex overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900" />
+        <InteractiveHero />
         <FeatureCarousel />
       </section>
 
-      {/* RIGHT – Auth Section (UNCHANGED) */}
-      <section className="relative flex items-center justify-center bg-gray-50 p-6 dark:bg-black">
+      {/* KANAN – Auth Section (TAMPIL DI SEMUA UKURAN LAYAR) */}
+      <section
+        className={cn(
+          "relative flex flex-1 flex-col items-center justify-center p-6",
+          // PERBAIKAN: Latar belakang gelap di mobile, dan transparan di desktop agar mewarisi warna dari body
+          "bg-slate-900 text-white lg:bg-transparent lg:text-foreground"
+        )}
+      >
         <div className="absolute right-6 top-6">
           <DarkModeToggle />
         </div>
-        <Card className="w-full max-w-sm border-none bg-transparent shadow-none md:border md:bg-card md:shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl">Selamat Datang</CardTitle>
-            <CardDescription>Masuk ke Nexaverse untuk memulai.</CardDescription>
+
+        <div className="lg:hidden w-full pt-16 pb-12">
+          <FeatureCarousel />
+        </div>
+
+        <Card
+          className={cn(
+            "w-full max-w-sm",
+            "border-none bg-transparent shadow-none lg:border lg:bg-card lg:shadow-lg"
+          )}
+        >
+          <CardHeader className="text-center lg:text-left">
+            <CardTitle className="text-2xl text-white lg:text-foreground">
+              Selamat Datang
+            </CardTitle>
+            <CardDescription className="text-zinc-400 lg:text-muted-foreground">
+              Masuk ke Nexaverse untuk memulai.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
             {ready && (
@@ -265,7 +231,7 @@ export default function Home() {
                 <Separator />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
+                <span className="bg-slate-900 lg:bg-card px-2 text-muted-foreground">
                   Atau lanjutkan dengan
                 </span>
               </div>

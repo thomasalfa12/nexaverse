@@ -1,19 +1,6 @@
-// File: src/components/admin/RequestVerifiedSbtTable.tsx
-
 "use client";
 
-// SINKRONISASI: Mengimpor tipe yang benar dari Prisma
 import type { VerifiedEntity, VerifiedSbtClaimProcess } from "@prisma/client";
-
-// Tipe gabungan yang akan diterima oleh komponen ini dari AdminPage
-export type SbtApprovalRequest = VerifiedSbtClaimProcess & {
-  entity: VerifiedEntity;
-};
-
-// Tipe spesifik untuk status agar lebih aman
-type SbtClaimStatus = "NOT_REQUESTED" | "REQUESTED" | "APPROVED" | "CLAIMED";
-
-// Impor komponen UI dari Shadcn
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,28 +15,37 @@ import {
   Rocket,
 } from "lucide-react";
 
-// Komponen internal untuk menampilkan status dengan lebih visual.
+export type SbtApprovalRequest = VerifiedSbtClaimProcess & {
+  entity: VerifiedEntity;
+};
+
+type SbtClaimStatus = "NOT_REQUESTED" | "REQUESTED" | "APPROVED" | "CLAIMED";
+
 const StatusBadge = ({ status }: { status: SbtClaimStatus }) => {
+  // PERBAIKAN: Menggunakan warna dasar dari tema untuk status default
   const statusConfig = {
     NOT_REQUESTED: {
       text: "Belum Diminta",
       icon: Clock,
-      className: "bg-gray-100 text-gray-800 border-gray-200",
+      className: "bg-secondary text-secondary-foreground border-border",
     },
     REQUESTED: {
       text: "Menunggu",
       icon: Clock,
-      className: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      className:
+        "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-500/30",
     },
     APPROVED: {
       text: "Disetujui",
       icon: CheckCircle,
-      className: "bg-blue-100 text-blue-800 border-blue-200",
+      className:
+        "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-500/30",
     },
     CLAIMED: {
       text: "Diklaim",
       icon: FileCheck,
-      className: "bg-green-100 text-green-800 border-green-200",
+      className:
+        "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-500/30",
     },
   };
   const config = statusConfig[status] || statusConfig.REQUESTED;
@@ -66,7 +62,6 @@ const StatusBadge = ({ status }: { status: SbtClaimStatus }) => {
   );
 };
 
-// Komponen kartu untuk setiap permintaan
 function ApprovalCard({
   request,
   onApprove,
@@ -79,7 +74,6 @@ function ApprovalCard({
   const handleApproveClick = () => {
     onApprove(request);
   };
-
   const explorerUrl = `https://sepolia.basescan.org/address/${request.entity.walletAddress}`;
 
   return (
@@ -87,7 +81,8 @@ function ApprovalCard({
       <CardContent className="p-5">
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex-1 space-y-2">
-            <h3 className="font-bold text-lg text-gray-800">
+            {/* PERBAIKAN: Mengganti text-gray-800 dengan text-foreground */}
+            <h3 className="font-bold text-lg text-foreground">
               {request.entity.name}
             </h3>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -148,7 +143,6 @@ function ApprovalCard({
   );
 }
 
-// Komponen utama yang diekspor
 export default function RequestVerifiedSbtTable({
   requests,
   onApprove,
@@ -160,9 +154,10 @@ export default function RequestVerifiedSbtTable({
 }) {
   if (!requests || requests.length === 0) {
     return (
-      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl bg-gray-50">
-        <FileJson className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-lg font-semibold text-gray-800">
+      // PERBAIKAN: Mengganti warna hardcoded dengan variabel tema
+      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl bg-card">
+        <FileJson className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-2 text-lg font-semibold text-foreground">
           Tidak Ada Permintaan
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">

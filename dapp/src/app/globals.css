@@ -2,55 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ======================================================================== */
+/* --- TEMA GLOBAL BARU: "AURORA GLASS" --- */
+/* ======================================================================== */
+
 @layer base {
+  /* --- Light Mode Palette (Daylight Glass) --- */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --background: 200 20% 98%; /* Abu-abu sejuk yang sangat terang */
+    --foreground: 222 47% 11%; /* Biru tua untuk teks */
+    
+    --card: 200 20% 100%; /* Putih bersih untuk kartu */
+    --card-foreground: 222 47% 11%;
+
+    --popover: 200 20% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 217 91% 60%; /* Biru elektrik yang cerah */
+    --primary-foreground: 210 40% 98%; /* Teks putih di atas biru */
+
+    --secondary: 210 40% 96.1%; /* Abu-abu terang untuk elemen sekunder */
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 20% 65%; /* Teks abu-abu yang lebih lembut */
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%; /* Border abu-abu terang */
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%; /* Cincin fokus biru */
+
+    --radius: 0.75rem; /* Sedikit lebih bulat untuk estetika modern */
   }
+
+  /* --- Dark Mode Palette (Aurora Glass) --- */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 222 84% 4.9%; /* Biru malam yang sangat dalam */
+    --foreground: 210 40% 98%; /* Teks putih keabuan */
+
+    /* Kunci dari efek kaca: warna dasar yang gelap tapi tidak hitam pekat */
+    --card: 222 47% 11%; 
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%; /* Biru elektrik yang sama */
+    --primary-foreground: 222 47% 11%; /* Teks gelap di atas biru terang */
+
+    --secondary: 217 33% 17%; /* Biru keabuan gelap */
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 28% 47%; /* Teks abu-abu gelap */
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%; /* Border yang sangat halus */
+    --input: 217 33% 17%;
+    --ring: 217 91% 60%;
   }
-  
+}
+
+@layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* --- REKOMENDASI PENGGUNAAN EFEK KACA ---
+ *
+ * Untuk mendapatkan efek kaca transparan yang sesungguhnya,
+ * terapkan kelas berikut pada komponen Card, SideNav, atau Header Anda:
+ *
+ * className="bg-card/80 backdrop-blur-lg" (untuk dark mode)
+ * className="bg-card/60 backdrop-blur-xl" (untuk light mode)
+ *
+ * Anda bisa menyesuaikan nilai opasitas (80, 60) dan tingkat blur (lg, xl)
+ * untuk mencapai efek yang Anda inginkan.
+ *
+ * ======================================================================== */

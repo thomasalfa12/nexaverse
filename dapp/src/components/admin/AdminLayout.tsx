@@ -1,18 +1,26 @@
-// Langkah 1: Ganti seluruh isi file src/components/admin/AdminLayout.tsx
-// dengan kode di bawah ini.
+// File: src/components/admin/AdminLayout.tsx
 
 import { ReactNode } from "react";
-import { Inbox, CheckSquare, FileText } from "lucide-react";
+import { Inbox, CheckSquare, FileText, Loader2 } from "lucide-react";
+
+// Tipe data baru untuk props statistik
+export interface AdminStats {
+  pendingCount: number;
+  registeredCount: number;
+  sbtRequestCount: number;
+}
 
 // Komponen internal untuk kartu statistik di header
 const StatCard = ({
   title,
   value,
   icon: Icon,
+  isLoading,
 }: {
   title: string;
   value: string | number;
   icon: React.ElementType;
+  isLoading?: boolean;
 }) => (
   <div className="bg-card p-4 rounded-xl border flex items-center gap-4">
     <div className="p-3 bg-primary/10 rounded-lg">
@@ -20,12 +28,28 @@ const StatCard = ({
     </div>
     <div>
       <p className="text-sm text-muted-foreground">{title}</p>
-      <p className="text-2xl font-bold">{value}</p>
+      {/* Tampilkan loader jika data sedang dimuat, jika tidak tampilkan nilainya */}
+      <div className="text-2xl font-bold h-8 flex items-center">
+        {isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          value
+        )}
+      </div>
     </div>
   </div>
 );
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+// Komponen AdminLayout yang telah direfactor
+export default function AdminLayout({
+  children,
+  stats,
+  isLoading,
+}: {
+  children: ReactNode;
+  stats: AdminStats;
+  isLoading?: boolean; // Tambahkan prop isLoading
+}) {
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-4 sm:p-6">
       {/* Header Dasbor dengan KPI */}
@@ -34,10 +58,25 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           Dasbor Admin Registry
         </h1>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {/* Anda bisa mengisi 'value' ini dengan data nyata nanti */}
-          <StatCard title="Permintaan Baru" value="12" icon={Inbox} />
-          <StatCard title="Institusi Terdaftar" value="84" icon={CheckSquare} />
-          <StatCard title="Permintaan SBT" value="5" icon={FileText} />
+          {/* Menggunakan nilai dinamis dari props `stats` */}
+          <StatCard
+            title="Permintaan Baru"
+            value={stats.pendingCount}
+            icon={Inbox}
+            isLoading={isLoading}
+          />
+          <StatCard
+            title="Entitas Terverifikasi"
+            value={stats.registeredCount}
+            icon={CheckSquare}
+            isLoading={isLoading}
+          />
+          <StatCard
+            title="Permintaan Lencana"
+            value={stats.sbtRequestCount}
+            icon={FileText}
+            isLoading={isLoading}
+          />
         </div>
       </header>
 

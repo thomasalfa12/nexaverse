@@ -10,12 +10,13 @@ import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useTheme } from "next-themes"; // PERBAIKAN: Impor useTheme
 
 // --- Impor hook kustom Anda ---
 import { useAuth } from "@/components/auth/AuthProviders";
-import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet"; // PERBAIKAN: Impor hook asli
+import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
 
-// --- UI & Icons (Tidak Berubah) ---
+// --- UI & Icons ---
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CheckCircle,
   HelpCircle,
@@ -58,13 +60,14 @@ import {
   Shield,
   User,
   ChevronRight,
-  Building,
+  BadgeCheck,
   Home,
   LayoutDashboard,
-  Loader2,
-} from "lucide-react";
+  Moon,
+  Sun,
+} from "lucide-react"; // PERBAIKAN: Menambahkan Moon & Sun
 
-// --- Konfigurasi Menu & Fungsi Filter (Tidak Berubah, sudah benar dari refactor sebelumnya) ---
+// --- Konfigurasi Menu & Fungsi Filter ---
 export type NavItemConfig = {
   href: string;
   label: string;
@@ -90,9 +93,9 @@ const menuConfig: NavItemConfig[] = [
         roles: ["REGISTRY_ADMIN"],
       },
       {
-        href: "/dashboard/admin/institution",
-        label: "Institution",
-        icon: Building,
+        href: "/dashboard/admin/verified",
+        label: "Verified Dashboard",
+        icon: BadgeCheck,
         roles: ["VERIFIED_ENTITY"],
       },
     ],
@@ -107,9 +110,8 @@ const filterMenuByRoles = (
     .map((item) => {
       if (item.children) {
         const filteredChildren = filterMenuByRoles(item.children, userRoles);
-        if (filteredChildren.length > 0) {
+        if (filteredChildren.length > 0)
           return { ...item, children: filteredChildren };
-        }
         return null;
       }
       if (
@@ -138,12 +140,13 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="flex min-h-screen w-full bg-gray-100 dark:bg-black">
+    // PERBAIKAN: Menghapus bg-gray-100 dark:bg-black agar tema global dari body berlaku
+    <div className="flex min-h-screen w-full">
       <TooltipProvider>
         <aside
           className={cn(
             "fixed inset-y-0 left-0 z-20 hidden h-full flex-col border-r transition-all duration-300 ease-in-out sm:flex",
-            "border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl",
+            "bg-card/80 dark:bg-card/60 backdrop-blur-xl border-border/50",
             isSidebarCollapsed ? "w-20" : "w-64"
           )}
         >
@@ -164,7 +167,7 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
         <header
           className={cn(
             "sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b px-4 sm:px-6",
-            "border-white/10 bg-white/50 dark:bg-black/50 backdrop-blur-xl"
+            "bg-background/80 dark:bg-background/60 backdrop-blur-lg border-border/50"
           )}
         >
           <div className="flex items-center gap-4">
@@ -177,9 +180,8 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
                 </SheetTrigger>
                 <SheetContent
                   side="left"
-                  className="w-64 p-0 bg-background border-r"
+                  className="w-64 p-0 bg-card/95 backdrop-blur-lg border-r"
                 >
-                  {/* FIX: Menambahkan SheetHeader dengan judul yang tersembunyi secara visual */}
                   <SheetHeader className="sr-only">
                     <SheetTitle>Menu Navigasi</SheetTitle>
                     <SheetDescription>
@@ -206,8 +208,16 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
   );
 }
 
-// --- Komponen Pendukung (Breadcrumbs, NavContent, NavItem) ---
-// (Tidak ada perubahan di sini, semua sudah benar dari refactor sebelumnya)
+// --- Komponen Pendukung ---
+
+const MenuSkeleton = () => (
+  <div className="grid items-start gap-2 px-3 animate-pulse">
+    {[...Array(5)].map((_, i) => (
+      <Skeleton key={i} className="h-10 w-full" />
+    ))}
+  </div>
+);
+
 function Breadcrumbs({ menu }: { menu: NavItemConfig[] }) {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
@@ -226,7 +236,6 @@ function Breadcrumbs({ menu }: { menu: NavItemConfig[] }) {
     return <h1 className="text-xl font-semibold">Discover</h1>;
   return (
     <div className="flex items-center gap-2 text-sm sm:text-base">
-      {" "}
       {segments.map((segment, index) => {
         const path = `/${segments.slice(0, index + 1).join("/")}`;
         const label =
@@ -234,7 +243,6 @@ function Breadcrumbs({ menu }: { menu: NavItemConfig[] }) {
         const isLast = index === segments.length - 1;
         return (
           <div key={path} className="flex items-center gap-2">
-            {" "}
             <span
               className={cn(
                 "font-semibold",
@@ -242,16 +250,17 @@ function Breadcrumbs({ menu }: { menu: NavItemConfig[] }) {
               )}
             >
               {label}
-            </span>{" "}
+            </span>
             {!isLast && (
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}{" "}
+            )}
           </div>
         );
-      })}{" "}
+      })}
     </div>
   );
 }
+
 function NavContent({
   isCollapsed,
   onCollapse,
@@ -265,43 +274,45 @@ function NavContent({
 }) {
   return (
     <div className="flex h-full flex-col">
-      {" "}
       <div
         className={cn(
-          "flex h-16 items-center border-b border-white/10 px-4",
+          "flex h-16 items-center border-b border-border/50 px-4",
           isCollapsed ? "justify-center" : "justify-between"
         )}
       >
-        {" "}
         {!isCollapsed && (
-          <h1 className="text-xl font-bold tracking-tight text-primary">
+          <Link
+            href="/dashboard"
+            className="text-xl font-bold tracking-tight text-primary"
+          >
             Nexaverse
-          </h1>
-        )}{" "}
+          </Link>
+        )}
         {onCollapse && (
           <Button variant="ghost" size="icon" onClick={onCollapse}>
-            {isCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
+            {isCollapsed ? (
+              <PanelRightClose className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
           </Button>
-        )}{" "}
-      </div>{" "}
+        )}
+      </div>
       <ScrollArea className="flex-1 py-4">
-        {" "}
         {isLoading ? (
-          <div className="flex justify-center items-center h-full">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
+          <MenuSkeleton />
         ) : (
           <nav className="grid items-start gap-1 px-3">
-            {" "}
             {menu.map((item) => (
               <NavItem key={item.href} item={item} isCollapsed={isCollapsed} />
-            ))}{" "}
+            ))}
           </nav>
-        )}{" "}
-      </ScrollArea>{" "}
+        )}
+      </ScrollArea>
     </div>
   );
 }
+
 function NavItem({
   item,
   isCollapsed,
@@ -318,6 +329,7 @@ function NavItem({
     setIsOpen(pathname.startsWith(item.href));
   }, [pathname, item.href]);
   const { href, label, icon: Icon, isBeta, children } = item;
+
   const content = (
     <div
       className={cn(
@@ -328,13 +340,11 @@ function NavItem({
         isCollapsed ? "justify-center" : "justify-start"
       )}
     >
-      {" "}
-      <Icon className="h-5 w-5 flex-shrink-0" />{" "}
+      <Icon className="h-5 w-5 flex-shrink-0" />
       {!isCollapsed && (
         <>
-          {" "}
-          <span className="flex-grow text-left">{label}</span>{" "}
-          {isBeta && <Badge variant="outline">Beta</Badge>}{" "}
+          <span className="flex-grow text-left">{label}</span>
+          {isBeta && <Badge variant="outline">Beta</Badge>}
           {children && (
             <ChevronRight
               className={cn(
@@ -342,9 +352,9 @@ function NavItem({
                 isOpen && "rotate-90"
               )}
             />
-          )}{" "}
+          )}
         </>
-      )}{" "}
+      )}
       {isActive && !isCollapsed && (
         <motion.div
           layoutId="active-glow"
@@ -352,27 +362,26 @@ function NavItem({
           initial={false}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         />
-      )}{" "}
+      )}
     </div>
   );
+
   const linkWrapper = (
     <Link href={href} className="relative">
-      {" "}
       {isCollapsed ? (
         <Tooltip delayDuration={0}>
-          {" "}
-          <TooltipTrigger asChild>{content}</TooltipTrigger>{" "}
-          <TooltipContent side="right">{label}</TooltipContent>{" "}
+          <TooltipTrigger asChild>{content}</TooltipTrigger>
+          <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       ) : (
         content
-      )}{" "}
+      )}
     </Link>
   );
+
   if (children && !isCollapsed) {
     return (
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        {/* Pastikan tidak ada spasi antara Trigger dan Button */}
         <CollapsibleTrigger asChild>
           <button type="button" className="w-full">
             {content}
@@ -389,13 +398,10 @@ function NavItem({
   return linkWrapper;
 }
 
-// ============================================================================
-// --- PERBAIKAN: Komponen UserMenu sekarang terintegrasi penuh ---
-// ============================================================================
 function UserMenu() {
   const router = useRouter();
-
-  // Gunakan kedua hook otentikasi
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { theme, setTheme } = useTheme(); // PERBAIKAN: Menambahkan hook useTheme
   const {
     isLoggedIn: isSocial,
     address: socialAddr,
@@ -404,28 +410,21 @@ function UserMenu() {
   const { address: walletAddr, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
 
-  // Tentukan status login dan alamat aktif
   const loggedIn = isSocial || isConnected;
   const addr = socialAddr || walletAddr;
 
   const handleLogout = async () => {
-    // 1. Hapus sesi di backend (endpoint terpadu)
     await fetch("/api/user/logout", { method: "POST" });
-
-    // 2. Jalankan fungsi logout dari hook yang sesuai
-    if (isSocial) {
-      await socialLogout();
-    } else if (isConnected) {
-      disconnect();
-    }
-
-    // 3. Arahkan pengguna kembali ke halaman utama
+    if (isSocial) await socialLogout();
+    else if (isConnected) disconnect();
     router.replace("/");
   };
 
+  if (isAuthLoading) {
+    return <Skeleton className="h-10 w-10 rounded-full" />;
+  }
+
   if (!loggedIn) {
-    // Tombol ini mungkin tidak akan pernah terlihat karena ada RouteGuard,
-    // tapi ini adalah fallback yang baik.
     return (
       <Button onClick={() => router.push("/")}>
         <LogIn className="mr-2 h-4 w-4" /> Sign In
@@ -433,24 +432,49 @@ function UserMenu() {
     );
   }
 
+  // PERBAIKAN: Menggunakan optional chaining untuk mengakses properti user dengan aman
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userName = (user as any)?.name;
+  const userInitial = userName
+    ? userName.charAt(0)
+    : addr?.slice(2, 4).toUpperCase();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-9 w-9 border-2 border-primary/50">
-            <AvatarFallback>{addr?.slice(2, 4).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{userInitial}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">My Account</p>
+            <p className="text-sm font-medium leading-none">
+              {userName || "Digital Creator"}
+            </p>
             <p className="text-xs leading-none text-muted-foreground font-mono">
-              {addr?.slice(0, 6)}...{addr?.slice(-4)}
+              {addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ""}
             </p>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
+          <User className="mr-2 h-4 w-4" />
+          <span>Profile</span>
+        </DropdownMenuItem>
+        {/* PERBAIKAN: Menambahkan item menu untuk mengganti tema */}
+        <DropdownMenuItem
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          {theme === "dark" ? (
+            <Sun className="mr-2 h-4 w-4" />
+          ) : (
+            <Moon className="mr-2 h-4 w-4" />
+          )}
+          <span>Ganti Tema</span>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />

@@ -1,18 +1,17 @@
+// Langkah 1: Buka file src/components/admin/RequestTable.tsx
+// dan ganti seluruh isinya dengan kode yang telah diperbaiki ini.
+
 "use client";
 
 import { useState } from "react";
 import type { VerifiedEntity } from "@prisma/client";
 import { toast } from "sonner";
-
-// UI Components
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-
-// Icons
 import {
   Loader2,
   ChevronDown,
@@ -30,15 +29,13 @@ interface Props {
   onRegister: (verified: VerifiedEntity) => Promise<void>;
 }
 
-// SINKRONISASI: typeMap ini sekarang selaras dengan enum `EntityType` di ISBTRegistry.sol
 const typeMap: Record<number, string> = {
-  1: "Institusi", // Universitas, Sekolah, Perusahaan
-  2: "Kreator", // Individu, Pengajar
-  3: "Komunitas", // Guild, Grup Online
+  1: "Institusi",
+  2: "Kreator",
+  3: "Komunitas",
   4: "DAO",
 };
 
-// Komponen untuk setiap item permintaan dalam bentuk kartu
 function RequestItemCard({
   request,
   onRegister,
@@ -53,9 +50,6 @@ function RequestItemCard({
     setIsPending(true);
     try {
       await onRegister(request);
-      // Pesan sukses tidak lagi dibutuhkan di sini karena sudah ditangani di parent (AdminPage)
-    } catch {
-      // Error juga sudah ditangani di parent
     } finally {
       setIsPending(false);
     }
@@ -72,7 +66,6 @@ function RequestItemCard({
       onOpenChange={setIsOpen}
       className="bg-card border rounded-xl shadow-sm transition-all hover:shadow-md"
     >
-      {/* Bagian yang selalu terlihat */}
       <div className="flex items-center p-4">
         <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
           <div className="font-semibold text-primary">{request.name}</div>
@@ -83,7 +76,6 @@ function RequestItemCard({
             {request.contactEmail}
           </div>
           <div className="hidden md:block text-sm text-muted-foreground">
-            {/* SINKRONISASI: Menggunakan `entityType` sesuai skema final */}
             {typeMap[request.entityType] ?? "Tidak Dikenal"}
           </div>
           <div className="font-mono text-xs text-muted-foreground">
@@ -110,8 +102,6 @@ function RequestItemCard({
           </CollapsibleTrigger>
         </div>
       </div>
-
-      {/* Bagian detail yang bisa diperluas */}
       <CollapsibleContent>
         <div className="border-t bg-muted/30 p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
@@ -126,12 +116,11 @@ function RequestItemCard({
               <Globe className="h-4 w-4 mt-1 text-muted-foreground" />
               <div>
                 <p className="font-semibold">Primary URL</p>
-                {/* SINKRONISASI: Menggunakan `primaryUrl` sesuai skema final */}
                 <a
                   href={`https://${request.primaryUrl}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {request.primaryUrl}
                 </a>
@@ -142,15 +131,10 @@ function RequestItemCard({
               <div>
                 <p className="font-semibold">Tanggal Permintaan</p>
                 <p className="text-muted-foreground">
-                  {/* SINKRONISASI: Menambahkan pengecekan null untuk `registrationDate` */}
                   {request.registeredAt
                     ? new Date(request.registeredAt).toLocaleDateString(
                         "id-ID",
-                        {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        }
+                        { day: "numeric", month: "long", year: "numeric" }
                       )
                     : "N/A"}
                 </p>
@@ -161,7 +145,6 @@ function RequestItemCard({
               <div>
                 <p className="font-semibold">Jenis Entitas</p>
                 <p className="text-muted-foreground">
-                  {/* SINKRONISASI: Menggunakan `entityType` sesuai skema final */}
                   {typeMap[request.entityType] ?? "Tidak Dikenal"}
                 </p>
               </div>
@@ -192,13 +175,13 @@ function RequestItemCard({
   );
 }
 
-// Komponen utama yang diekspor
 export default function RequestTable({ requests, onRegister }: Props) {
   if (requests.length === 0) {
     return (
-      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl bg-gray-50">
-        <Inbox className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-lg font-semibold text-gray-800">
+      // PERBAIKAN: Mengganti warna hardcoded dengan variabel tema
+      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl bg-card">
+        <Inbox className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-2 text-lg font-semibold text-foreground">
           Kotak Masuk Kosong
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -207,7 +190,6 @@ export default function RequestTable({ requests, onRegister }: Props) {
       </div>
     );
   }
-
   return (
     <div className="space-y-3">
       {requests.map((req) => (

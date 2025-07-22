@@ -18,13 +18,13 @@ import RequestVerifiedSbtTable, {
 import type { VerifiedEntity } from "@prisma/client";
 import { toast } from "sonner";
 import { approveSbt } from "@/lib/server/approveSbtAction"; // FIX: Path import yang benar
-
+import { AlertTriangle, ShieldOff } from "lucide-react";
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const [isApproving, startApproveTransition] = useTransition();
-
+  const [isLoading, setIsLoading] = useState(true);
   const { data: owner } = useReadContract({
     address: contracts.registry.address,
     abi: contracts.registry.abi,
@@ -41,10 +41,14 @@ export default function AdminPage() {
     owner.toLowerCase() === address.toLowerCase();
 
   useEffect(() => {
-    if (isConnected && isAdmin) {
-      fetchVerifiedEntities();
-      fetchSBTRequests();
-    }
+    const fetchData = async () => {
+      setIsLoading(true);
+      if (isConnected && isAdmin) {
+        await Promise.all([fetchVerifiedEntities(), fetchSBTRequests()]);
+      }
+      setIsLoading(false);
+    };
+    fetchData();
   }, [isConnected, isAdmin]);
 
   const fetchVerifiedEntities = async () => {
@@ -148,26 +152,44 @@ export default function AdminPage() {
   };
 
   if (!isConnected) {
-    /* ... */
-  }
-  if (!isAdmin) {
-    /* ... */
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+        <AlertTriangle className="h-12 w-12 text-yellow-500" />
+        <h2 className="text-xl font-semibold">Wallet Belum Terhubung</h2>
+        <p className="text-muted-foreground max-w-sm">
+          Harap hubungkan wallet Anda terlebih dahulu untuk mengakses halaman
+          admin.
+        </p>
+      </div>
+    );
   }
 
+  if (!isLoading && !isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+        <ShieldOff className="h-12 w-12 text-red-500" />
+        <h2 className="text-xl font-semibold">Akses Ditolak</h2>
+        <p className="text-muted-foreground max-w-sm">
+          Halaman ini hanya dapat diakses oleh admin (pemilik kontrak) registry.
+        </p>
+      </div>
+    );
+  }
+
+  const stats = {
+    pendingCount: pendingRequests.length,
+    registeredCount: registeredList.length,
+    sbtRequestCount: sbtRequests.length,
+  };
+
   return (
-    <AdminLayout>
+    <AdminLayout stats={stats} isLoading={isLoading}>
       <section className="mb-10">
         <h1 className="text-xl font-bold mb-4">
           📩 Permintaan Pendaftaran Entitas
         </h1>
         <RequestTable requests={pendingRequests} onRegister={handleRegister} />
       </section>
-
-      <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-2">✅ Entitas Terverifikasi</h2>
-        <VerifiedEntityTable data={registeredList} />
-      </section>
-
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-2">
           🖊️ Permintaan Lencana Verified
@@ -177,6 +199,11 @@ export default function AdminPage() {
           onApprove={handleApprove}
           isProcessing={isApproving}
         />
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-2">✅ Entitas Terverifikasi</h2>
+        <VerifiedEntityTable data={registeredList} />
       </section>
 
       <section>
