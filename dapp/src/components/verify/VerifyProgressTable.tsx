@@ -251,7 +251,7 @@ export default function VerifyProgressTable() {
                       {/* FIX: Meneruskan sbtUri sebagai prop ke komponen ClaimSBTButton */}
                       <ClaimSBTButton
                         onSuccess={() => window.location.reload()}
-                        sbtUri={status.sbtUri}
+                        sbtUri={status.sbtCid}
                       />
                     </motion.div>
                   </AnimatePresence>

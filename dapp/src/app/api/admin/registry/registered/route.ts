@@ -1,31 +1,23 @@
+// File: app/api/admin/registry/registered/route.ts
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { RegistrationStatus } from "@prisma/client";
+import { VerificationStatus } from "@prisma/client";
 
-/**
- * GET: Mengambil semua institusi yang statusnya sudah 'REGISTERED' di database.
- * Pendekatan ini jauh lebih efisien karena tidak perlu melakukan panggilan on-chain
- * untuk setiap entri. Kita percaya pada status di DB kita karena status tersebut
- * hanya diatur setelah transaksi on-chain berhasil.
- */
+// GET: Mengambil semua entitas yang status verifikasinya sudah REGISTERED.
 export async function GET() {
   try {
-    const registeredInstitutions = await prisma.institution.findMany({
+    const registeredEntities = await prisma.verifiedEntity.findMany({
       where: {
-        // Cukup filter berdasarkan status di database
-        status: RegistrationStatus.REGISTERED,
+        status: VerificationStatus.REGISTERED,
       },
       orderBy: {
-        // Urutkan berdasarkan kapan mereka disetujui
         registeredAt: "desc",
       },
     });
-    return NextResponse.json(registeredInstitutions);
+    return NextResponse.json(registeredEntities);
   } catch (err) {
-    console.error("[GET /api/admin/registry/registered]", err);
-    return NextResponse.json(
-      { error: "Failed to fetch registered institutions" },
-      { status: 500 }
-    );
+    console.error("[GET /registered]", err);
+    return NextResponse.json({ error: "Failed to fetch registered entities" }, { status: 500 });
   }
 }

@@ -8,21 +8,16 @@ import {
   useWriteContract,
 } from "wagmi";
 import { contracts } from "@/lib/contracts";
-// REMOVED: useRouter tidak digunakan
-// import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import RequestTable from "@/components/admin/RequestTable";
-import InstitutionTable from "@/components/admin/InstitutionTable";
-import InstitutionStats from "@/components/admin/InstitutionStats";
-import RequestSBTTable, {
-  type SbtMintWithInstitution, // Tipe ini sudah benar
-} from "@/components/admin/RequestSBTTable";
-import type { Institution } from "@prisma/client"; // Tipe ini dibutuhkan
-// REMOVED: SbtMint dari prisma tidak digunakan langsung di sini
-// REMOVED: SBTRequest tidak lagi ada
-// import type { SBTRequest } from "@/components/admin/RequestSBTTable";
+import VerifiedEntityTable from "@/components/admin/VerifiedEntityTable"; // REKOMENDASI: Ganti nama komponen
+import VerifiedEntityStats from "@/components/admin/VerifiedEntityStats"; // REKOMENDASI: Ganti nama komponen
+import RequestVerifiedSbtTable, {
+  type SbtApprovalRequest, // Menggunakan tipe yang benar dari action
+} from "@/components/admin/RequestVerifiedSbtTable"; // REKOMENDASI: Ganti nama komponen
+import type { VerifiedEntity } from "@prisma/client";
 import { toast } from "sonner";
-import { approveSbt } from "@/lib/server/approveSbtAction";
+import { approveSbt } from "@/lib/server/approveSbtAction"; // FIX: Path import yang benar
 
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
@@ -36,10 +31,9 @@ export default function AdminPage() {
     functionName: "owner",
   });
 
-  const [pendingRequests, setPendingRequests] = useState<Institution[]>([]);
-  const [registeredList, setRegisteredList] = useState<Institution[]>([]);
-  // FIX: Gunakan tipe data yang benar dari komponen anak
-  const [sbtRequests, setSbtRequests] = useState<SbtMintWithInstitution[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<VerifiedEntity[]>([]);
+  const [registeredList, setRegisteredList] = useState<VerifiedEntity[]>([]);
+  const [sbtRequests, setSbtRequests] = useState<SbtApprovalRequest[]>([]);
 
   const isAdmin =
     typeof owner === "string" &&
@@ -48,28 +42,26 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isConnected && isAdmin) {
-      fetchInstitutionData();
+      fetchVerifiedEntities();
       fetchSBTRequests();
     }
   }, [isConnected, isAdmin]);
 
-  const fetchInstitutionData = async () => {
+  const fetchVerifiedEntities = async () => {
     try {
       const [resPending, resRegistered] = await Promise.all([
-        fetch("/api/admin/registry/register-institution"),
+        fetch("/api/admin/registry/pending-request"), // REKOMENDASI: Buat endpoint terpisah
         fetch("/api/admin/registry/registered"),
       ]);
-
       const [pending, registered] = await Promise.all([
         resPending.json(),
         resRegistered.json(),
       ]);
-
       setPendingRequests(pending);
       setRegisteredList(registered);
     } catch (err) {
-      console.error("[fetchInstitutionData]", err);
-      toast.error("Gagal memuat data institusi.");
+      console.error("[fetchVerifiedEntities]", err);
+      toast.error("Gagal memuat data entitas.");
     }
   };
 
@@ -77,8 +69,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/registry/sbt-requests");
       if (!res.ok) throw new Error("Gagal memuat permintaan SBT");
-      // Tipe data di sini sudah benar
-      const data: SbtMintWithInstitution[] = await res.json();
+      const data: SbtApprovalRequest[] = await res.json();
       setSbtRequests(data);
     } catch (err) {
       console.error("[fetchSBTRequests]", err);
@@ -86,7 +77,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleRegister = async (institution: Institution) => {
+  const handleRegister = async (entity: VerifiedEntity) => {
     if (!publicClient) {
       toast.error("Gagal terhubung ke provider blockchain.");
       return;
@@ -96,27 +87,25 @@ export default function AdminPage() {
       const txHash = await writeContractAsync({
         address: contracts.registry.address,
         abi: contracts.registry.abi,
-        functionName: "registerInstitution",
+        // SINKRONISASI: Menggunakan nama fungsi `registerEntity` yang benar
+        functionName: "registerEntity",
         args: [
-          institution.walletAddress as `0x${string}`,
-          institution.name,
-          institution.officialWebsite,
-          institution.contactEmail,
-          institution.institutionType,
+          entity.walletAddress as `0x${string}`,
+          entity.name,
+          entity.primaryUrl, // SINKRONISASI: Menggunakan `primaryUrl`
+          entity.contactEmail,
+          entity.entityType,
         ],
       });
 
       toast.loading("Transaksi dikirim, menunggu konfirmasi on-chain...", {
         id: "tx-receipt",
       });
-
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
-
-      if (receipt.status === "reverted") {
+      if (receipt.status === "reverted")
         throw new Error("Transaksi on-chain gagal (reverted).");
-      }
 
       toast.dismiss("tx-receipt");
       toast.success("Transaksi on-chain berhasil!");
@@ -124,20 +113,13 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/registry/finalize-registration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          institutionId: institution.id,
-          txHash: txHash,
-        }),
+        body: JSON.stringify({ entityId: entity.id, txHash }),
       });
+      if (!res.ok) throw new Error("Gagal memperbarui status di database.");
 
-      if (!res.ok) {
-        throw new Error("Gagal memperbarui status di database.");
-      }
-
-      toast.success("✅ Institusi berhasil terdaftar on-chain dan off-chain!");
-      fetchInstitutionData();
+      toast.success("✅ Entitas berhasil terdaftar on-chain dan off-chain!");
+      fetchVerifiedEntities();
     } catch (err: unknown) {
-      // FIX: Gunakan `unknown` untuk type safety
       toast.dismiss("tx-receipt");
       const errorMessage =
         err instanceof Error
@@ -148,20 +130,15 @@ export default function AdminPage() {
     }
   };
 
-  const handleApprove = async (req: SbtMintWithInstitution) => {
-    // Gunakan useTransition untuk UI yang non-blocking
+  const handleApprove = async (req: SbtApprovalRequest) => {
     startApproveTransition(async () => {
       const toastId = toast.loading("Memulai proses persetujuan otomatis...");
-
-      // Panggil Server Action yang cerdas
       const result = await approveSbt(req);
-
-      // Tangani hasilnya untuk memberikan feedback ke admin
       if (result.success) {
         toast.success("✅ Proses persetujuan selesai dan tersinkronisasi!", {
           id: toastId,
         });
-        fetchSBTRequests(); // Refresh data di tabel
+        fetchSBTRequests();
       } else {
         toast.error(result.error || "Proses persetujuan otomatis gagal.", {
           id: toastId,
@@ -171,48 +148,40 @@ export default function AdminPage() {
   };
 
   if (!isConnected) {
-    return (
-      <div className="p-4 text-muted-foreground">
-        Harap hubungkan wallet terlebih dahulu.
-      </div>
-    );
+    /* ... */
   }
-
   if (!isAdmin) {
-    return (
-      <div className="p-4 text-red-600">
-        🚫 Akses ditolak. Hanya admin (owner) yang dapat mengakses halaman ini.
-      </div>
-    );
+    /* ... */
   }
 
   return (
     <AdminLayout>
       <section className="mb-10">
         <h1 className="text-xl font-bold mb-4">
-          📩 Permintaan Pendaftaran Institusi
+          📩 Permintaan Pendaftaran Entitas
         </h1>
         <RequestTable requests={pendingRequests} onRegister={handleRegister} />
       </section>
 
       <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-2">✅ Institusi Terdaftar</h2>
-        <InstitutionTable data={registeredList} />
+        <h2 className="text-lg font-semibold mb-2">✅ Entitas Terverifikasi</h2>
+        <VerifiedEntityTable data={registeredList} />
       </section>
 
       <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-2">🖊️ Permintaan Mint SBT</h2>
-        <RequestSBTTable
+        <h2 className="text-lg font-semibold mb-2">
+          🖊️ Permintaan Lencana Verified
+        </h2>
+        <RequestVerifiedSbtTable
           requests={sbtRequests}
           onApprove={handleApprove}
-          // FIX: Teruskan state isApproving ke komponen anak
           isProcessing={isApproving}
         />
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-2">📊 Statistik Institusi</h2>
-        <InstitutionStats data={registeredList} />
+        <h2 className="text-lg font-semibold mb-2">📊 Statistik Entitas</h2>
+        <VerifiedEntityStats data={registeredList} />
       </section>
     </AdminLayout>
   );

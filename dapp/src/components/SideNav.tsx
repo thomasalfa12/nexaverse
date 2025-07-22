@@ -33,7 +33,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipProvider,
@@ -63,7 +70,7 @@ export type NavItemConfig = {
   label: string;
   icon: React.ElementType;
   isBeta?: boolean;
-  roles?: ("REGISTRY_ADMIN" | "INSTITUTION_ADMIN")[];
+  roles?: ("REGISTRY_ADMIN" | "VERIFIED_ENTITY")[];
   children?: NavItemConfig[];
 };
 const menuConfig: NavItemConfig[] = [
@@ -86,7 +93,7 @@ const menuConfig: NavItemConfig[] = [
         href: "/dashboard/admin/institution",
         label: "Institution",
         icon: Building,
-        roles: ["INSTITUTION_ADMIN"],
+        roles: ["VERIFIED_ENTITY"],
       },
     ],
   },
@@ -118,7 +125,6 @@ const filterMenuByRoles = (
 
 // ============================================================================
 // --- Komponen Utama: SideNav ---
-// (Tidak ada perubahan signifikan di sini, semua sudah benar dari refactor sebelumnya)
 // ============================================================================
 export default function SideNav({ children }: { children: React.ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -173,6 +179,13 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
                   side="left"
                   className="w-64 p-0 bg-background border-r"
                 >
+                  {/* FIX: Menambahkan SheetHeader dengan judul yang tersembunyi secara visual */}
+                  <SheetHeader className="sr-only">
+                    <SheetTitle>Menu Navigasi</SheetTitle>
+                    <SheetDescription>
+                      Pilih halaman tujuan dari daftar menu yang tersedia.
+                    </SheetDescription>
+                  </SheetHeader>
                   <NavContent
                     isCollapsed={false}
                     isLoading={isLoading}
@@ -183,7 +196,6 @@ export default function SideNav({ children }: { children: React.ReactNode }) {
             </div>
             <Breadcrumbs menu={accessibleMenu} />
           </div>
-          {/* UserMenu sekarang akan berfungsi dengan benar */}
           <UserMenu />
         </header>
         <main className="flex-1 overflow-y-auto">

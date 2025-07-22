@@ -44,14 +44,29 @@ export async function POST(req: Request) {
     const addr = await recoverMessageAddress({ message, signature });
 
     const roles: string[] = [];
-    const owner = await viemClient.readContract({
+
+//role based admin login
+    const ownerRegistry = await viemClient.readContract({
       address: contracts.registry.address,
       abi: contracts.registry.abi,
       functionName: 'owner',
     }) as `0x${string}`;
 
-    if (addr.toLowerCase() === owner.toLowerCase()) {
+    if (addr.toLowerCase() === ownerRegistry.toLowerCase()) {
       roles.push("REGISTRY_ADMIN");
+    }
+
+    const balance = await viemClient.readContract({
+      address: contracts.verified.address,
+      abi: contracts.verified.abi,
+      functionName: 'balanceOf',
+      args: [addr], // Alamat pengguna yang ingin kita periksa
+    }) as bigint; // Hasil dari balanceOf adalah bigint
+
+    // Jika saldo pengguna lebih besar dari 0, berarti mereka memiliki SBT
+    // dan berhak mendapatkan role VERIFIED_ENTITY.
+    if (balance > 0n) {
+      roles.push("VERIFIED_ENTITY");
     }
 
     // FIX: Tambahkan pengecekan ini di dalam fungsi untuk meyakinkan TypeScript

@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { RegistrationStatus } from "@prisma/client";
+// SINKRONISASI: Menggunakan enum `VerificationStatus` yang benar
+import { VerificationStatus } from "@prisma/client";
 
-/**
- * GET: Memeriksa status pendaftaran sebuah alamat wallet.
- *
- * FIX: Logika ini sekarang sepenuhnya off-chain dan hanya mengandalkan
- * database sebagai sumber kebenaran, membuatnya sangat cepat dan konsisten
- * dengan fungsi `getVerifyStatus`.
- */
 export async function GET(req: NextRequest) {
   try {
     const wallet = req.nextUrl.searchParams.get("wallet");
@@ -19,34 +13,27 @@ export async function GET(req: NextRequest) {
 
     const address = wallet.toLowerCase();
 
-    // Cukup lakukan SATU panggilan ke database untuk mendapatkan semua info.
-    const institution = await prisma.institution.findUnique({
+    // SINKRONISASI: Menggunakan model `verifiedEntity`
+    const entity = await prisma.verifiedEntity.findUnique({
       where: { walletAddress: address },
       select: {
-        status: true, // Kita hanya butuh statusnya
+        status: true, // Hanya butuh statusnya
       },
     });
 
-    // Jika tidak ada entri, berarti belum pernah submit.
-    if (!institution) {
+    if (!entity) {
       return NextResponse.json({
         submitted: false,
         registered: false,
       });
     }
 
-    // Kembalikan status berdasarkan data dari database.
     return NextResponse.json({
-      submitted: true, // 'submitted' jika ada entri di database.
-      registered: institution.status === RegistrationStatus.REGISTERED, // 'registered' jika statusnya REGISTERED.
+      submitted: true,
+      registered: entity.status === VerificationStatus.REGISTERED,
     });
-
   } catch (err) {
     console.error("[GET /api/user/address-check]", err);
-    // Jika terjadi error database, kirim respons error JSON yang jelas.
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -31,7 +31,7 @@ type Props = {
   onSuccess?: () => void;
 };
 
-// Komponen baru untuk tampilan "Submission Success" yang lebih sinematik
+// Komponen untuk tampilan "Submission Success" (tidak berubah, sudah bagus)
 const SubmissionSuccessView = () => {
   return (
     <div className="text-center p-4 sm:p-8 flex flex-col items-center justify-center min-h-[300px]">
@@ -57,19 +57,18 @@ const SubmissionSuccessView = () => {
         transition={{ delay: 0.3 }}
       >
         Data Anda telah kami terima. Silakan tunggu sementara tim admin kami
-        melakukan verifikasi dan pendaftaran on-chain.
+        melakukan verifikasi.
       </motion.p>
     </div>
   );
 };
 
 export default function RegisterForm({ onSuccess }: Props) {
-  // --- SEMUA LOGIKA ANDA TETAP SAMA, TIDAK ADA PERUBAHAN ---
   const { address } = useAccount();
   const [form, setForm] = useState({
     name: "",
     email: "",
-    website: "",
+    primaryUrl: "",
     type: "",
   });
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
@@ -81,11 +80,12 @@ export default function RegisterForm({ onSuccess }: Props) {
       if (!address) return;
       try {
         const res = await fetch(`/api/user/address-check?wallet=${address}`);
+        if (!res.ok) return; // Tambahkan pengecekan jika API gagal
         const data = await res.json();
         setIsAlreadyRegistered(data.registered);
         setSubmitted(data.submitted ?? false);
       } catch (err) {
-        console.error("Gagal fetch status institusi", err);
+        console.error("Gagal fetch status entitas", err);
       }
     };
     check();
@@ -105,38 +105,37 @@ export default function RegisterForm({ onSuccess }: Props) {
     if (!address) return toast.error("Wallet belum terhubung");
 
     startTransition(async () => {
+      // SINKRONISASI: Payload disesuaikan dengan skema dan kontrak final
       const payload = {
         name: form.name,
-        officialWebsite: form.website,
+        primaryUrl: form.primaryUrl,
         contactEmail: form.email,
         walletAddress: address,
-        institutionType: parseInt(form.type),
+        entityType: parseInt(form.type),
       };
 
       try {
-        const res = await fetch("/api/admin/registry/register-institution", {
+        // SINKRONISASI: Menggunakan endpoint yang benar
+        const res = await fetch("/api/admin/registry/register-entity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
 
         if (res.ok) {
-          toast.success("Institusi berhasil didaftarkan.");
+          toast.success("Permintaan pendaftaran berhasil dikirim.");
           setSubmitted(true);
-          // onSuccess tidak perlu dipanggil di sini jika submitted state ditangani secara internal
-          // Namun, jika parent perlu tahu, biarkan saja.
           onSuccess?.();
         } else {
           const error = await res.json();
-          toast.error(error?.error || "Gagal mendaftarkan institusi.");
+          toast.error(error?.error || "Gagal mengirim permintaan.");
         }
       } catch (err) {
-        toast.error("Terjadi kesalahan saat submit.");
+        toast.error("Terjadi kesalahan saat mengirim.");
         console.error(err);
       }
     });
   };
-  // --- AKHIR DARI BLOK LOGIKA YANG TIDAK DIUBAH ---
 
   if (!address) {
     return (
@@ -150,12 +149,11 @@ export default function RegisterForm({ onSuccess }: Props) {
     return (
       <div className="flex items-center justify-center text-sm text-green-600 p-4 gap-2">
         <Check className="h-5 w-5" />
-        <p>Anda sudah terdaftar sebagai institusi.</p>
+        <p>Alamat wallet ini sudah terdaftar sebagai entitas terverifikasi.</p>
       </div>
     );
   }
 
-  // Card tidak lagi memiliki border-dashed, lebih bersih dan modern.
   return (
     <Card className="w-full max-w-lg border-0 shadow-none bg-transparent">
       <CardContent className="p-1">
@@ -164,13 +162,15 @@ export default function RegisterForm({ onSuccess }: Props) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Nama Institusi</Label>
+              <Label htmlFor="name">
+                Nama Entitas (Institusi/Komunitas/Anda)
+              </Label>
               <div className="relative">
                 <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   id="name"
                   name="name"
-                  placeholder="Contoh: Nexaverse"
+                  placeholder="Contoh: Nexaverse Foundation"
                   value={form.name}
                   onChange={handleFormChange}
                   required
@@ -180,14 +180,16 @@ export default function RegisterForm({ onSuccess }: Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="website">Website Resmi</Label>
+              <Label htmlFor="primaryUrl">
+                URL Utama (Website/Twitter/Portfolio)
+              </Label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  id="website"
-                  name="website"
-                  placeholder="https://nexaverse.xyz"
-                  value={form.website}
+                  id="primaryUrl"
+                  name="primaryUrl" // SINKRONISASI: Menggunakan `primaryUrl`
+                  placeholder="nexaverse.xyz"
+                  value={form.primaryUrl}
                   onChange={handleFormChange}
                   required
                   className="pl-10"
@@ -203,7 +205,7 @@ export default function RegisterForm({ onSuccess }: Props) {
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="nexaverse@mail.com"
+                  placeholder="contact@nexaverse.xyz"
                   value={form.email}
                   onChange={handleFormChange}
                   required
@@ -213,7 +215,7 @@ export default function RegisterForm({ onSuccess }: Props) {
             </div>
 
             <div className="space-y-2">
-              <Label>Jenis Institusi</Label>
+              <Label>Jenis Entitas</Label>
               <Select
                 name="type"
                 required
@@ -221,14 +223,20 @@ export default function RegisterForm({ onSuccess }: Props) {
                 value={form.type}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pilih jenis institusi Anda" />
+                  <SelectValue placeholder="Pilih jenis entitas Anda" />
                 </SelectTrigger>
+                {/* SINKRONISASI: Opsi disesuaikan dengan enum `EntityType` di kontrak */}
                 <SelectContent>
-                  <SelectItem value="1">Universitas</SelectItem>
-                  <SelectItem value="2">Sekolah</SelectItem>
-                  <SelectItem value="3">Perusahaan</SelectItem>
-                  <SelectItem value="4">Organisasi</SelectItem>
-                  <SelectItem value="5">Lainnya</SelectItem>
+                  <SelectItem value="1">
+                    Institusi (Universitas, Sekolah, Perusahaan)
+                  </SelectItem>
+                  <SelectItem value="2">
+                    Kreator (Individu, Pengajar)
+                  </SelectItem>
+                  <SelectItem value="3">
+                    Komunitas (Guild, Grup Online)
+                  </SelectItem>
+                  <SelectItem value="4">DAO</SelectItem>
                 </SelectContent>
               </Select>
             </div>

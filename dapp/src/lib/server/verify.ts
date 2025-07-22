@@ -1,63 +1,56 @@
+// File: lib/server/verify.ts
+
 "use server";
 
 import { prisma } from "@/lib/server/prisma";
-import { RegistrationStatus, SbtStatus } from "@prisma/client";
+// Mengimpor enum yang benar dan final dari Prisma client
+import { VerificationStatus, VerifiedSbtClaimStatus } from "@prisma/client";
 
-/**
- * Tipe data yang dikembalikan untuk merepresentasikan status verifikasi pengguna
- * di seluruh alur aplikasi.
- */
 export type VerifyStatus = {
   registered: boolean;
   requested: boolean;
   approved: boolean;
   claimed: boolean;
-  sbtUri?: string | null;
+  sbtCid?: string | null;
 };
 
-/**
- * Fungsi utama untuk mendapatkan status verifikasi lengkap seorang pengguna (institusi).
- * Ini adalah SATU-SATUNYA FUNGSI yang harus dipanggil oleh frontend (VerifyProgressTable)
- * untuk menentukan langkah mana yang harus ditampilkan kepada pengguna.
- */
 export async function getVerifyStatus(address: `0x${string}`): Promise<VerifyStatus> {
   try {
     const lowercasedAddress = address.toLowerCase();
 
-    // Lakukan SATU kueri efisien untuk mendapatkan semua data yang kita butuhkan.
-    const institution = await prisma.institution.findUnique({
+    const entity = await prisma.verifiedEntity.findUnique({
       where: { walletAddress: lowercasedAddress },
       include: {
-        SbtMint: true, // Sertakan data SbtMint yang berelasi
+        sbtClaimProcess: true, // Sertakan data proses klaim SBT
       },
     });
 
-    // Jika tidak ada data institusi, berarti pengguna belum melakukan apa-apa.
-    if (!institution) {
+    if (!entity) {
       return { registered: false, requested: false, approved: false, claimed: false };
     }
 
-    const sbtRequest = institution.SbtMint;
+    const claimProcess = entity.sbtClaimProcess;
 
-    // Kembalikan status yang sepenuhnya berasal dari database kita.
-    return {
-      // 'registered' jika status di tabel Institution adalah REGISTERED.
-      registered: institution.status === RegistrationStatus.REGISTERED,
+  return {
+      // 'registered' jika status verifikasi entitas adalah REGISTERED.
+      registered: entity.status === VerificationStatus.REGISTERED,
       
-      // 'requested' jika ada entri SbtMint yang terkait.
-      requested: !!sbtRequest,
+      // 'requested' jika proses klaim sudah dimulai (statusnya bukan NOT_REQUESTED lagi).
+      requested: claimProcess?.status !== VerifiedSbtClaimStatus.NOT_REQUESTED,
       
-      // FIX: 'approved' harus true jika statusnya APPROVED ATAU SUDAH MELEWATINYA (CLAIMED).
-      // Ini adalah perbaikan logika utama.
-      approved: sbtRequest?.status === SbtStatus.APPROVED || sbtRequest?.status === SbtStatus.CLAIMED,
+      // 'approved' jika status proses klaim adalah APPROVED atau sudah melewatinya (CLAIMED).
+      approved:
+        claimProcess?.status === VerifiedSbtClaimStatus.APPROVED ||
+        claimProcess?.status === VerifiedSbtClaimStatus.CLAIMED,
       
-      // 'claimed' jika status di SbtMint adalah CLAIMED.
-      claimed: sbtRequest?.status === SbtStatus.CLAIMED,
-      sbtUri: sbtRequest?.uri, 
+      // 'claimed' jika status proses klaim adalah CLAIMED.
+      claimed: claimProcess?.status === VerifiedSbtClaimStatus.CLAIMED,
+
+      // Teruskan CID untuk pratinjau di langkah klaim.
+      sbtCid: claimProcess?.cid, 
     };
   } catch (err) {
     console.error("[getVerifyStatus] error:", err);
-    // Kembalikan status default jika terjadi error.
     return { registered: false, requested: false, approved: false, claimed: false };
   }
 }

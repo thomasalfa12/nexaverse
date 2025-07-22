@@ -14,8 +14,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { contracts } from "@/lib/contracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-
-// Ikon
 import {
   Loader2,
   PartyPopper,
@@ -25,14 +23,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-// Tipe Metadata
 type SbtMetadata = { name: string; description: string; image: string };
-
-// ============================================================================
-// --- SUB-KOMPONEN TAMPILAN (MEMECAH UI MENJADI TAHAPAN) ---
-// ============================================================================
-
-// 1. Tampilan Awal: Panggung untuk mengklaim
 const InitialClaimView = ({
   metadata,
   isLoading,
@@ -277,8 +268,8 @@ export function ClaimSBTButton({
     startTransition(async () => {
       try {
         const txHash = await writeContractAsync({
-          address: contracts.institution.address,
-          abi: contracts.institution.abi,
+          address: contracts.verified.address,
+          abi: contracts.verified.abi,
           functionName: "claim",
           args: [],
         });
@@ -326,7 +317,6 @@ export function ClaimSBTButton({
     }
   }, [isConfirmed, hash, address, isSyncing, onSuccess, isProcessComplete]);
 
-  // --- RENDER LOGIC ---
   return (
     <div className="w-full max-w-md mx-auto bg-card rounded-2xl border shadow-lg p-6 sm:p-8">
       <AnimatePresence mode="wait">

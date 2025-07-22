@@ -23,15 +23,16 @@ export async function POST(req: Request) {
     const roles: string[] = [];
     
     // FIX: Lakukan type assertion pada hasil readContract menjadi `0x${string}`
-    const owner = await viemClient.readContract({
-      address: contracts.registry.address,
-      abi: contracts.registry.abi,
-      functionName: 'owner',
-    }) as `0x${string}`;
-
-    if (address.toLowerCase() === owner.toLowerCase()) {
-      roles.push("REGISTRY_ADMIN");
-    }
+    const verifiedEntitySBTOwner = await viemClient.readContract({
+         address: contracts.verified.address, // <-- Gunakan kontrak institusi
+         abi: contracts.verified.abi,
+         functionName: 'owner',
+       }) as `0x${string}`;
+   
+       if (address.toLowerCase() === verifiedEntitySBTOwner.toLowerCase()) {
+         roles.push("VERIFIED_ENTITY");
+       }
+   
 
     const tokenPayload = { address, roles };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });

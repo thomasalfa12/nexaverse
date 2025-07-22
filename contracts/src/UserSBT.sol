@@ -1,41 +1,72 @@
+// File: contracts/UserSBT.sol
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+// REFACTOR: Impor interface yang telah diperbarui
+import "./interfaces/ISBTRegistry.sol";
 
-interface IISBTRegistry {
-    function isRegisteredInstitution(address) external view returns (bool);
-}
-
+/**
+ * @title UserSBT (Refactored)
+ * @author Nexaverse (Refactored by Gemini)
+ * @notice Kontrak ini adalah template generik untuk menerbitkan kredensial
+ * (ijazah, sertifikat, dll.) sebagai SBT kepada pengguna akhir.
+ *
+ * --- ANALISIS & REFACTORING ---
+ * 1.  **Menghapus Batasan "Satu Token per Pengguna":**
+ * - Desain sebelumnya (menggunakan `mapping(address => uint256)`) secara fundamental
+ * membatasi pengguna untuk hanya bisa memiliki SATU SBT dari kontrak ini.
+ * Ini adalah batasan kritis. Bayangkan sebuah universitas yang hanya bisa
+ * memberikan satu sertifikat webinar seumur hidup kepada seorang mahasiswa.
+ * - REFACTOR: Mapping `ownedToken` dan `issuedBy` telah dihapus. Kontrak sekarang
+ * sepenuhnya mengandalkan fungsionalitas standar ERC721 untuk melacak kepemilikan,
+ * memungkinkan satu pengguna untuk memiliki BANYAK SBT dari kontrak yang sama.
+ *
+ * 2.  **Fungsi Berbasis `tokenId`:**
+ * - Untuk mendukung banyak token per pengguna, semua fungsi inti (`revoke`, `renewExpiry`,
+ * `isExpired`) sekarang beroperasi menggunakan `tokenId` sebagai input utama,
+ * bukan alamat `user`. Ini lebih aman, lebih eksplisit, dan bebas ambiguitas.
+ *
+ * 3.  **Konsistensi Penamaan:**
+ * - Semua referensi ke "Institution" telah diubah menjadi "Entity" agar
+ * selaras dengan kontrak ISBTRegistry.sol.
+ */
 contract UserSBT is ERC721URIStorage, Ownable, Pausable {
     uint256 public tokenIdCounter;
     IISBTRegistry public immutable registry;
 
-    struct SBTData { address issuer; uint256 expiry; } // 0 = permanenanal
-    mapping(address => uint256) public ownedToken;     // user → tokenId
-    mapping(uint256 => SBTData) public sbtMetadata;    // tokenId → data
-    mapping(address => address) public issuedBy;       // user → issuer
+    struct SBTData {
+        address issuer;
+        uint256 expiry; // 0 = permanen
+    }
+    
+    // REFACTOR: Menghapus `ownedToken` dan `issuedBy` mappings.
+    // `sbtMetadata` sekarang menjadi satu-satunya sumber kebenaran untuk data token.
+    mapping(uint256 => SBTData) public sbtMetadata;
 
-    event Minted  (address indexed to,   uint256 indexed id, uint256 expiry);
-    event Revoked (address indexed user, uint256 indexed id);
-    event Expired (address indexed user, uint256 indexed id);
-    event Renewed (address indexed user, uint256 indexed id, uint256 newExpiry);
+    event Minted(address indexed to, uint256 indexed tokenId, uint256 expiry);
+    event Revoked(uint256 indexed tokenId);
+    event Expired(uint256 indexed tokenId);
+    event Renewed(uint256 indexed tokenId, uint256 newExpiry);
 
     constructor(
         address registryAddr,
-        string  memory name_,
+        string memory name_,
         string memory symbol_,
         address owner_
     ) ERC721(name_, symbol_) Ownable(owner_) {
         registry = IISBTRegistry(registryAddr);
     }
 
-    modifier onlyInstitution() {
+    // REFACTOR: Nama modifier diubah untuk konsistensi.
+    modifier onlyVerifiedEntity() {
+        // REFACTOR: Memanggil fungsi yang benar dari interface.
         require(
-            registry.isRegisteredInstitution(msg.sender),
-            "Not verified institution"
+            registry.isVerifiedEntity(msg.sender),
+            "Caller is not a verified entity"
         );
         _;
     }
@@ -46,80 +77,79 @@ contract UserSBT is ERC721URIStorage, Ownable, Pausable {
         address to,
         string memory uri,
         uint256 expiryTimestamp
-    ) external onlyInstitution whenNotPaused {
-        require(ownedToken[to] == 0, "User already has SBT");
+    ) external onlyVerifiedEntity whenNotPaused {
+        // REFACTOR: Menghapus `require(ownedToken[to] == 0, "User already has SBT");`
+        // Sekarang pengguna bisa menerima banyak kredensial dari penerbit yang sama.
         require(expiryTimestamp == 0 || expiryTimestamp > block.timestamp, "Invalid expiry");
 
         uint256 id = ++tokenIdCounter;
         _safeMint(to, id);
         _setTokenURI(id, uri);
 
-        ownedToken[to]      = id;
-        sbtMetadata[id]     = SBTData(msg.sender, expiryTimestamp);
-        issuedBy[to]        = msg.sender;
+        sbtMetadata[id] = SBTData(msg.sender, expiryTimestamp);
 
         emit Minted(to, id, expiryTimestamp);
     }
 
-    function revoke(address user) external onlyInstitution whenNotPaused {
-        uint256 id = ownedToken[user];
-        require(id != 0, "No SBT");                 // existence
-        require(sbtMetadata[id].issuer == msg.sender, "Not issuer");
+    // REFACTOR: Fungsi sekarang menerima `tokenId` untuk kejelasan.
+    function revoke(uint256 tokenId) external onlyVerifiedEntity whenNotPaused {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        require(sbtMetadata[tokenId].issuer == msg.sender, "Caller is not the issuer");
 
-        _burn(id);
-        _cleanup(user, id);
-        emit Revoked(user, id);
+        // `_burn` secara otomatis menangani pembersihan data kepemilikan.
+        _burn(tokenId);
+        // Kita hanya perlu membersihkan metadata kustom kita.
+        delete sbtMetadata[tokenId];
+        
+        emit Revoked(tokenId);
     }
 
-    function autoRevokeExpired(address user) external whenNotPaused {
-        uint256 id = ownedToken[user];
-        require(id != 0, "No SBT");
-        uint256 exp = sbtMetadata[id].expiry;
-        require(exp != 0, "Permanent SBT");
-        require(exp < block.timestamp, "Not expired");
+    // REFACTOR: Fungsi sekarang menerima `tokenId` untuk kejelasan.
+    function autoRevokeExpired(uint256 tokenId) external whenNotPaused {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        uint256 exp = sbtMetadata[tokenId].expiry;
+        require(exp != 0, "Token is permanent");
+        require(exp < block.timestamp, "Token has not expired yet");
 
-        _burn(id);
-        _cleanup(user, id);
-        emit Expired(user, id);
+        _burn(tokenId);
+        delete sbtMetadata[tokenId];
+        
+        emit Expired(tokenId);
     }
 
-    function renewExpiry(address user, uint256 newExpiry)
-        external onlyInstitution whenNotPaused
+    // REFACTOR: Fungsi sekarang menerima `tokenId` untuk kejelasan.
+    function renewExpiry(uint256 tokenId, uint256 newExpiry)
+        external onlyVerifiedEntity whenNotPaused
     {
-        uint256 id = ownedToken[user];
-        require(id != 0, "No SBT");
-        require(sbtMetadata[id].issuer == msg.sender, "Not issuer");
-        require(newExpiry == 0 || newExpiry > block.timestamp, "Invalid expiry");
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        require(sbtMetadata[tokenId].issuer == msg.sender, "Caller is not the issuer");
+        require(newExpiry == 0 || newExpiry > block.timestamp, "Invalid new expiry");
 
-        sbtMetadata[id].expiry = newExpiry;
-        emit Renewed(user, id, newExpiry);
+        sbtMetadata[tokenId].expiry = newExpiry;
+        emit Renewed(tokenId, newExpiry);
     }
 
     // ------------------------------ HELPERS ------------------------------
 
-    function isExpired(address user) external view returns (bool) {
-        uint256 id = ownedToken[user];
-        if (id == 0) return false;
-        uint256 exp = sbtMetadata[id].expiry;
+    // REFACTOR: Fungsi sekarang menerima `tokenId` untuk kejelasan.
+    function isExpired(uint256 tokenId) external view returns (bool) {
+        if (_ownerOf(tokenId) == address(0)) return false;
+        uint256 exp = sbtMetadata[tokenId].expiry;
         return exp != 0 && exp < block.timestamp;
     }
 
-    function _cleanup(address user, uint256 id) internal {
-        delete ownedToken[user];
-        delete issuedBy[user];
-        delete sbtMetadata[id];
-    }
+    // REFACTOR: Menghapus fungsi `_cleanup` karena tidak lagi diperlukan.
 
-    // lock transfers
+    // Logika Soulbound (tidak berubah, sudah benar)
     function _update(address to, uint256 id, address auth)
         internal override returns (address)
     {
-        address from = super._ownerOf(id);
+        address from = _ownerOf(id);
         require(from == address(0) || to == address(0), "SBT: non-transferable");
         return super._update(to, id, auth);
     }
 
-    // pause controls
+    // Kontrol Pausable (tidak berubah, sudah benar)
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
 }

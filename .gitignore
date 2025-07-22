@@ -1,24 +1,49 @@
-# Node
+# File ini memberi tahu Git untuk mengabaikan file dan folder tertentu.
+# Ini sangat penting untuk menjaga repositori tetap bersih dan kecil.
+
+# Dependensi (Raksasa yang Harus Diabaikan)
+# Folder ini akan dibuat ulang secara otomatis saat `npm install` dijalankan.
 node_modules/
-.next/
-dist/
-out/
 
-# Env
-.env
-.env.local
-
-# System
-.DS_Store
-
-# Artifacts (contracts)
-artifacts/
-cache/
-typechain/
-
-# Logs
+# Log & File Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-/generated/prisma
+# File Environment
+# Berisi kunci API dan rahasia. JANGAN PERNAH di-commit ke Git.
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Konfigurasi Next.js ---
+# Folder build dan cache dari Next.js
+.next/
+out/
+
+# --- Konfigurasi Hardhat ---
+# Folder build, cache, dan typechain dari Hardhat
+artifacts/
+cache/
+typechain-types/
+
+# File laporan cakupan (coverage)
+coverage/
+coverage.json
+
+# --- Data Lokal ---
+# Folder data dari database lokal (misalnya, dari Docker)
+mysql-data/
+
+# File deployment yang berisi alamat kontrak.
+# Terkadang ini diabaikan, tetapi untuk proyek ini, kita akan menyimpannya
+# agar frontend tahu alamat kontrak yang benar. Jika Anda memiliki
+# alur kerja CI/CD yang lebih canggih, Anda mungkin ingin mengabaikannya.
+# deployments.json
+# userSbtDeployments.json
+
+# --- Konfigurasi Sistem Operasi ---
+.DS_Store
+Thumbs.db

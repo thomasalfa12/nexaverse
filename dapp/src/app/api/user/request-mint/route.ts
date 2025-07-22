@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { SbtStatus } from "@prisma/client";
+// SINKRONISASI: Menggunakan enum `VerifiedSbtClaimStatus` yang benar
+import { VerifiedSbtClaimStatus } from "@prisma/client";
 
 export async function POST(req: Request) {
   try {
@@ -9,27 +10,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing address or txHash" }, { status: 400 });
     }
 
-    const institution = await prisma.institution.findUnique({
-      where: { walletAddress: address },
+    // SINKRONISASI: Menggunakan model `verifiedEntity`
+    const entity = await prisma.verifiedEntity.findUnique({
+      where: { walletAddress: address.toLowerCase() },
     });
 
-    if (!institution) {
-      return NextResponse.json({ error: "Institution not found" }, { status: 404 });
+    if (!entity) {
+      return NextResponse.json({ error: "Verified entity not found" }, { status: 404 });
     }
 
-    const existingRequest = await prisma.sbtMint.findUnique({
-      where: { institutionId: institution.id },
+    // SINKRONISASI: Menggunakan model `verifiedSbtClaimProcess`
+    const existingRequest = await prisma.verifiedSbtClaimProcess.findUnique({
+      where: { entityId: entity.id },
     });
 
     if (existingRequest) {
       return NextResponse.json({ message: "Request already exists" }, { status: 409 });
     }
 
-    await prisma.sbtMint.create({
+    await prisma.verifiedSbtClaimProcess.create({
       data: {
-        institutionId: institution.id,
-        status: SbtStatus.PENDING,
-        requestTxHash: txHash, // Simpan bukti transaksi
+        entityId: entity.id,
+        status: VerifiedSbtClaimStatus.REQUESTED, // Status diubah menjadi REQUESTED
+        requestTxHash: txHash,
       },
     });
 

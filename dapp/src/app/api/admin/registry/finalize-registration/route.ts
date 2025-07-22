@@ -1,28 +1,30 @@
+// File: app/api/admin/registry/finalize-registration/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { RegistrationStatus } from "@prisma/client";
+import { VerificationStatus } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
   try {
-    const { institutionId, txHash } = await req.json();
+    // SINKRONISASI: Menggunakan nama variabel yang lebih jelas (`entityId`)
+    const { entityId, txHash } = await req.json();
 
-    if (!institutionId || !txHash) {
-      return NextResponse.json({ error: "Missing institutionId or txHash" }, { status: 400 });
+    if (!entityId || !txHash) {
+      return NextResponse.json({ error: "Missing entityId or txHash" }, { status: 400 });
     }
 
-    // Update status institusi yang ada
-    const updatedInstitution = await prisma.institution.update({
-      where: { id: Number(institutionId) },
+    const updatedEntity = await prisma.verifiedEntity.update({
+      where: { id: Number(entityId) },
       data: {
-        status: RegistrationStatus.REGISTERED,
+        status: VerificationStatus.REGISTERED,
         registrationTxHash: txHash,
         registeredAt: new Date(),
       },
     });
 
-    return NextResponse.json(updatedInstitution);
+    return NextResponse.json(updatedEntity);
   } catch (err) {
-    console.error("POST /api/admin/registry/finalize-registration error", err);
+    console.error("POST /finalize-registration error", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

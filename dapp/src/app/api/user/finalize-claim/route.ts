@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { SbtStatus } from "@prisma/client";
+// SINKRONISASI: Menggunakan enum `VerifiedSbtClaimStatus` yang benar
+import { VerifiedSbtClaimStatus } from "@prisma/client";
 
 export async function POST(req: Request) {
   try {
@@ -9,15 +10,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing address or txHash" }, { status: 400 });
     }
 
-    // Cari permintaan SbtMint yang terkait dengan alamat wallet ini
-    // melalui relasi dengan Institution.
-    const sbtRequest = await prisma.sbtMint.findFirst({
+    // SINKRONISASI: Menggunakan model `verifiedSbtClaimProcess` dan relasi yang benar
+    const sbtRequest = await prisma.verifiedSbtClaimProcess.findFirst({
       where: {
-        institution: {
-          walletAddress: address,
+        entity: {
+          walletAddress: address.toLowerCase(),
         },
-        // Pastikan kita hanya mengupdate permintaan yang sudah disetujui
-        status: SbtStatus.APPROVED,
+        status: VerifiedSbtClaimStatus.APPROVED,
       },
     });
 
@@ -25,13 +24,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No approved SBT request found for this address" }, { status: 404 });
     }
 
-    // Update status menjadi CLAIMED dan simpan bukti transaksinya.
-    await prisma.sbtMint.update({
+    await prisma.verifiedSbtClaimProcess.update({
       where: { id: sbtRequest.id },
       data: {
-        status: SbtStatus.CLAIMED,
+        status: VerifiedSbtClaimStatus.CLAIMED,
         claimTxHash: txHash,
-        claimedAt: new Date(),
+        claimedAt: new Date(), // Field ini sekarang ada di skema
       },
     });
 

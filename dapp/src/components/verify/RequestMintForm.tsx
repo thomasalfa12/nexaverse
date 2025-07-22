@@ -26,8 +26,8 @@ export function RequestMintForm({ onSuccess }: { onSuccess?: () => void }) {
       try {
         toast.info("Silakan konfirmasi transaksi di wallet Anda...");
         const txHash = await writeContractAsync({
-          address: contracts.institution.address,
-          abi: contracts.institution.abi,
+          address: contracts.verified.address,
+          abi: contracts.verified.abi,
           functionName: "requestMint",
           args: [],
         });

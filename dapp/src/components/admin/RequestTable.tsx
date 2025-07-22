@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { Institution } from "@prisma/client";
+import type { VerifiedEntity } from "@prisma/client";
+import { toast } from "sonner";
+
 // UI Components
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +11,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { toast } from "sonner";
 
 // Icons
 import {
@@ -25,25 +26,25 @@ import {
 } from "lucide-react";
 
 interface Props {
-  requests: Institution[];
-  onRegister: (institution: Institution) => Promise<void>;
+  requests: VerifiedEntity[];
+  onRegister: (verified: VerifiedEntity) => Promise<void>;
 }
 
+// SINKRONISASI: typeMap ini sekarang selaras dengan enum `EntityType` di ISBTRegistry.sol
 const typeMap: Record<number, string> = {
-  1: "Universitas",
-  2: "Sekolah",
-  3: "Perusahaan",
-  4: "Organisasi",
-  5: "Lainnya",
+  1: "Institusi", // Universitas, Sekolah, Perusahaan
+  2: "Kreator", // Individu, Pengajar
+  3: "Komunitas", // Guild, Grup Online
+  4: "DAO",
 };
 
-// Komponen baru untuk setiap item permintaan, sekarang dalam bentuk kartu yang bisa diperluas
+// Komponen untuk setiap item permintaan dalam bentuk kartu
 function RequestItemCard({
   request,
   onRegister,
 }: {
-  request: Institution;
-  onRegister: (req: Institution) => Promise<void>;
+  request: VerifiedEntity;
+  onRegister: (req: VerifiedEntity) => Promise<void>;
 }) {
   const [isPending, setIsPending] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -52,9 +53,9 @@ function RequestItemCard({
     setIsPending(true);
     try {
       await onRegister(request);
-      toast.success(`Institusi "${request.name}" berhasil didaftarkan.`);
+      // Pesan sukses tidak lagi dibutuhkan di sini karena sudah ditangani di parent (AdminPage)
     } catch {
-      toast.error("Gagal mendaftarkan institusi.");
+      // Error juga sudah ditangani di parent
     } finally {
       setIsPending(false);
     }
@@ -71,15 +72,19 @@ function RequestItemCard({
       onOpenChange={setIsOpen}
       className="bg-card border rounded-xl shadow-sm transition-all hover:shadow-md"
     >
-      {/* Bagian yang selalu terlihat (Collapsed View) */}
+      {/* Bagian yang selalu terlihat */}
       <div className="flex items-center p-4">
         <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
           <div className="font-semibold text-primary">{request.name}</div>
-          <div className="hidden md:block text-sm text-muted-foreground">
+          <div
+            className="hidden md:block text-sm text-muted-foreground truncate"
+            title={request.contactEmail}
+          >
             {request.contactEmail}
           </div>
           <div className="hidden md:block text-sm text-muted-foreground">
-            {typeMap[request.institutionType] ?? "Tidak Dikenal"}
+            {/* SINKRONISASI: Menggunakan `entityType` sesuai skema final */}
+            {typeMap[request.entityType] ?? "Tidak Dikenal"}
           </div>
           <div className="font-mono text-xs text-muted-foreground">
             {request.walletAddress.slice(0, 6)}...
@@ -106,7 +111,7 @@ function RequestItemCard({
         </div>
       </div>
 
-      {/* Bagian detail yang bisa diperluas (Expanded View) */}
+      {/* Bagian detail yang bisa diperluas */}
       <CollapsibleContent>
         <div className="border-t bg-muted/30 p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
@@ -120,14 +125,15 @@ function RequestItemCard({
             <div className="flex items-start gap-3">
               <Globe className="h-4 w-4 mt-1 text-muted-foreground" />
               <div>
-                <p className="font-semibold">Website</p>
+                <p className="font-semibold">Primary URL</p>
+                {/* SINKRONISASI: Menggunakan `primaryUrl` sesuai skema final */}
                 <a
-                  href={`https://${request.officialWebsite}`}
+                  href={`https://${request.primaryUrl}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-muted-foreground"
+                  className="text-blue-600 hover:underline"
                 >
-                  {request.officialWebsite}
+                  {request.primaryUrl}
                 </a>
               </div>
             </div>
@@ -136,20 +142,27 @@ function RequestItemCard({
               <div>
                 <p className="font-semibold">Tanggal Permintaan</p>
                 <p className="text-muted-foreground">
-                  {new Date(request.createdAt).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+                  {/* SINKRONISASI: Menambahkan pengecekan null untuk `registrationDate` */}
+                  {request.registeredAt
+                    ? new Date(request.registeredAt).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        }
+                      )
+                    : "N/A"}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <Building className="h-4 w-4 mt-1 text-muted-foreground" />
               <div>
-                <p className="font-semibold">Jenis Institusi</p>
+                <p className="font-semibold">Jenis Entitas</p>
                 <p className="text-muted-foreground">
-                  {typeMap[request.institutionType] ?? "Tidak Dikenal"}
+                  {/* SINKRONISASI: Menggunakan `entityType` sesuai skema final */}
+                  {typeMap[request.entityType] ?? "Tidak Dikenal"}
                 </p>
               </div>
             </div>
@@ -179,10 +192,11 @@ function RequestItemCard({
   );
 }
 
+// Komponen utama yang diekspor
 export default function RequestTable({ requests, onRegister }: Props) {
   if (requests.length === 0) {
     return (
-      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl">
+      <div className="text-center py-12 px-6 border-2 border-dashed rounded-xl bg-gray-50">
         <Inbox className="mx-auto h-12 w-12 text-gray-400" />
         <h3 className="mt-2 text-lg font-semibold text-gray-800">
           Kotak Masuk Kosong
