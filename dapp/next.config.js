@@ -16,8 +16,14 @@ const nextConfig = {
         port: "",
         pathname: '/ipfs/**',
       },
+      // FIX: Tambahkan placehold.co untuk placeholder images
+      {
+        protocol: "https",
+        hostname: 'placehold.co',
+        port: "",
+        pathname: '/**',
+      },
     ],
-    // PERBAIKAN 2: Hapus kunci 'domains' yang sudah usang
   },
 };
 

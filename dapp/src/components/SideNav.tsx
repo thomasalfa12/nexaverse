@@ -93,7 +93,7 @@ const menuConfig: NavItemConfig[] = [
         roles: ["REGISTRY_ADMIN"],
       },
       {
-        href: "/dashboard/admin/verified",
+        href: "/dashboard/admin/verifiedUser",
         label: "Verified Dashboard",
         icon: BadgeCheck,
         roles: ["VERIFIED_ENTITY"],

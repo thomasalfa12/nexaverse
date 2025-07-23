@@ -8,16 +8,16 @@ import {
   useWriteContract,
 } from "wagmi";
 import { contracts } from "@/lib/contracts";
-import AdminLayout from "@/components/admin/AdminLayout";
-import RequestTable from "@/components/admin/RequestTable";
-import VerifiedEntityTable from "@/components/admin/VerifiedEntityTable"; // REKOMENDASI: Ganti nama komponen
-import VerifiedEntityStats from "@/components/admin/VerifiedEntityStats"; // REKOMENDASI: Ganti nama komponen
+import AdminLayout from "@/components/admin/registry/AdminLayout";
+import RequestTable from "@/components/admin/registry/RequestTable";
+import VerifiedEntityTable from "@/components/admin/registry/VerifiedEntityTable"; // REKOMENDASI: Ganti nama komponen
+import VerifiedEntityStats from "@/components/admin/registry/VerifiedEntityStats"; // REKOMENDASI: Ganti nama komponen
 import RequestVerifiedSbtTable, {
   type SbtApprovalRequest, // Menggunakan tipe yang benar dari action
-} from "@/components/admin/RequestVerifiedSbtTable"; // REKOMENDASI: Ganti nama komponen
+} from "@/components/admin/registry/RequestVerifiedSbtTable"; // REKOMENDASI: Ganti nama komponen
 import type { VerifiedEntity } from "@prisma/client";
 import { toast } from "sonner";
-import { approveSbt } from "@/lib/server/approveSbtAction"; // FIX: Path import yang benar
+import { approveSbt } from "@/lib/server/actions/approveSbtAction"; // FIX: Path import yang benar
 import { AlertTriangle, ShieldOff } from "lucide-react";
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
