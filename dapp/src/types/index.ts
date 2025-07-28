@@ -34,5 +34,7 @@ export interface EnrollmentWithCourse extends PrismaEnrollment {
 }
 
 export interface ClaimableRecord extends PrismaEligibilityRecord {
-  template: TemplateWithStats;
+  template: CredentialTemplate & {
+    creator: Pick<VerifiedEntity, 'name'>;
+  };
 }

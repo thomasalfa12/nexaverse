@@ -8,7 +8,7 @@ import { contracts } from "@/lib/contracts";
 import { cidToBytes32 } from "@/lib/server/ipfs-utils";
 
 // FIX: Impor fungsi uploader Pinata yang sudah kita buat.
-import { uploadToPinataServer } from "@/lib/pinata-uploader";
+import { uploadJsonToPinata, uploadToPinataServer  } from "@/lib/pinata-uploader";
 
 export type SbtApprovalRequest = VerifiedSbtClaimProcess & {
   entity: VerifiedEntity;
@@ -19,7 +19,6 @@ const entityTypeMap: Record<number, string> = {
 };
 
 function createVerifBadgeSVG(entityName: string, date: string): string {
-  // ... (Kode SVG tidak berubah, tetap sama)
   return `
    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;">
       <defs>
@@ -55,16 +54,16 @@ export async function approveSbt(req: SbtApprovalRequest): Promise<{ success: bo
   try {
     const verificationDate = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
     
-    // --- REFACTOR UPLOAD GAMBAR SVG ---
+    // --- UPLOAD GAMBAR SVG (ini tetap sama) ---
     const svgImage = createVerifBadgeSVG(req.entity.name, verificationDate);
     const svgFile = new File([svgImage], `${req.entity.walletAddress}.svg`, { type: 'image/svg+xml' });
     const imageUrl = await uploadToPinataServer(svgFile);
-    // --- SELESAI REFACTOR UPLOAD GAMBAR ---
+    // --- SELESAI UPLOAD GAMBAR ---
 
     const metadata = {
       name: `Nexaverse Verified: ${req.entity.name}`,
       description: "This Soulbound Token certifies that this entity has been officially verified by the Nexaverse platform.",
-      image: imageUrl, // Menggunakan URL dari uploader
+      image: imageUrl,
       attributes: [
         { trait_type: "Entity Type", value: entityTypeMap[req.entity.entityType] ?? "General Entity" },
         { trait_type: "Verification Date", value: verificationDate },
@@ -72,11 +71,10 @@ export async function approveSbt(req: SbtApprovalRequest): Promise<{ success: bo
       ]
     };
 
-    // --- REFACTOR UPLOAD METADATA JSON ---
-    const jsonFile = new File([JSON.stringify(metadata)], `${req.entity.walletAddress}.json`, { type: 'application/json' });
-    const metadataUrl = await uploadToPinataServer(jsonFile);
+    // --- GUNAKAN FUNGSI JSON UPLOAD YANG SUDAH ADA ---
+    const metadataUrl = await uploadJsonToPinata(metadata, `${req.entity.walletAddress}.json`);
     const metadataCid = metadataUrl.replace('ipfs://', ''); // Ekstrak CID dari URL
-    // --- SELESAI REFACTOR UPLOAD METADATA ---
+    // --- SELESAI UPLOAD METADATA ---
 
     const cidBytes32 = cidToBytes32(metadataCid);
     const serverWallet = getServerWalletClient();

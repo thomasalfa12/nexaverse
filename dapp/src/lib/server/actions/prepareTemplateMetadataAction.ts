@@ -3,10 +3,12 @@
 import { uploadToPinata, uploadJsonToPinata } from "@/lib/pinata-uploader";
 import { getAuth } from "@/lib/server/auth";
 
+// FIX: Menambahkan `imageUrl` ke interface hasil
 interface MetadataResult {
   success: boolean;
   error?: string;
   metadataURI?: string;
+  imageUrl?: string;
 }
 
 export async function prepareTemplateMetadataAction(formData: FormData): Promise<MetadataResult> {
@@ -27,7 +29,8 @@ export async function prepareTemplateMetadataAction(formData: FormData): Promise
     const metadata = { name: title, description, image: imageUrl };
     const metadataURI = await uploadJsonToPinata(metadata, `${symbol}-metadata.json`);
 
-    return { success: true, metadataURI };
+    // FIX: Mengembalikan `imageUrl` di dalam objek hasil
+    return { success: true, metadataURI, imageUrl };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }

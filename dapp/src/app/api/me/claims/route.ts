@@ -2,26 +2,27 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getAuth } from "@/lib/server/auth";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { user } = await getAuth();
     if (!user?.address) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // FIX: Menggunakan model `EligibilityRecord` yang lebih efisien dan
-    // kompatibel dengan semua database, termasuk MySQL.
+    const userWallet = user.address.toLowerCase();
+
+    // KUNCI: Query ini sekarang akan berhasil karena `saveClaimCampaignAction`
+    // telah membuat `EligibilityRecord` yang diperlukan.
     const claimableRecords = await prisma.eligibilityRecord.findMany({
       where: {
-        userWalletAddress: user.address,
+        userWalletAddress: userWallet,
         status: "ELIGIBLE",
-        // Pastikan kita hanya mengambil dari kampanye kredensial, bukan kursus
         template: {
-          templateType: 'CREDENTIAL',
-        },
+          templateType: 'CREDENTIAL'
+        }
       },
       include: {
-        // Sertakan detail dari kredensial yang bisa diklaim
+        // Sertakan detail dari template yang bisa diklaim
         template: {
           include: {
             creator: {

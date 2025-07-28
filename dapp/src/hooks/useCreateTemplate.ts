@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useAccount, useWriteContract, usePublicClient } from "wagmi";
-// FIX: Menghapus impor `TransactionReceipt` yang tidak terpakai.
 import { parseEventLogs, type Log } from "viem";
 import { contracts } from "@/lib/contracts";
 import { prepareTemplateMetadataAction } from "@/lib/server/actions/prepareTemplateMetadataAction";
@@ -27,7 +26,6 @@ type DecodedLog = Log & {
 export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
   const { address: userAddress } = useAccount();
   const { writeContractAsync } = useWriteContract();
-  // Gunakan publicClient untuk menunggu transaksi secara manual
   const publicClient = usePublicClient();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -37,7 +35,6 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    // FIX: Menambahkan pengecekan untuk memastikan publicClient tidak undefined.
     if (!publicClient) {
       toast.error("Gagal terhubung ke jaringan.", {
         description: "Silakan coba segarkan halaman.",
@@ -51,9 +48,7 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
     });
 
     try {
-      // ======================================================
-      // LANGKAH 1: Persiapan Metadata (via Server Action)
-      // ======================================================
+      // LANGKAH 1: Persiapan Metadata
       const formData = new FormData();
       (Object.keys(values) as Array<keyof CreateTemplateArgs>).forEach((key) => {
         const value = values[key];
@@ -65,14 +60,13 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
       });
 
       const metadataResult = await prepareTemplateMetadataAction(formData);
-      if (!metadataResult.success || !metadataResult.metadataURI) {
+      // FIX: Memastikan `imageUrl` diterima dari server action
+      if (!metadataResult.success || !metadataResult.metadataURI || !metadataResult.imageUrl) {
         throw new Error(metadataResult.error || "Gagal menyiapkan metadata.");
       }
-      const { metadataURI } = metadataResult;
+      const { metadataURI, imageUrl } = metadataResult;
 
-      // ======================================================
-      // LANGKAH 2: Deploy Kontrak (Transaksi Pertama)
-      // ======================================================
+      // LANGKAH 2: Deploy Kontrak
       toast.loading("Menunggu persetujuan untuk deploy kontrak...", { id: toastId });
       
       const factoryAbi = values.distributionMethod === 'claim' ? contracts.merkleClaimSbtFactory.abi : contracts.userSbtFactory.abi;
@@ -80,7 +74,8 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
       
       let deployTxHash: `0x${string}`;
       if (values.distributionMethod === 'claim') {
-        const leaves = values.addresses.map(addr => keccak256(addr));
+        // Gunakan .toLowerCase() untuk konsistensi hashing
+        const leaves = values.addresses.map(addr => keccak256(addr.toLowerCase()));
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
         const merkleRoot = tree.getHexRoot();
 
@@ -88,20 +83,18 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
           address: contracts.merkleClaimSbtFactory.address,
           abi: factoryAbi,
           functionName: 'createMerkleClaimSBT',
-          args: [values.title, values.symbol, merkleRoot, metadataURI, userAddress],
+          args: [values.title, values.symbol, merkleRoot, metadataURI],
         });
       } else { // Airdrop
         deployTxHash = await writeContractAsync({
           address: contracts.userSbtFactory.address,
           abi: factoryAbi,
           functionName: 'createSbtContract',
-          args: [values.title, values.symbol], // Argumen sudah benar (2)
+          args: [values.title, values.symbol],
         });
       }
 
-      // ======================================================
-      // LANGKAH 3: Tunggu Konfirmasi & Dapatkan Alamat Kontrak Baru
-      // ======================================================
+      // LANGKAH 3: Tunggu Konfirmasi
       toast.loading("Men-deploy kontrak... Menunggu konfirmasi on-chain.", { id: toastId, description: `Tx: ${deployTxHash.slice(0, 12)}...` });
       
       const receipt = await publicClient.waitForTransactionReceipt({ hash: deployTxHash });
@@ -113,9 +106,7 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
       
       toast.success("Kontrak berhasil di-deploy!", { id: toastId, description: `Alamat: ${newContractAddress.slice(0,12)}...` });
 
-      // ======================================================
       // LANGKAH 4: Eksekusi Distribusi
-      // ======================================================
       if (values.distributionMethod === 'airdrop') {
         toast.loading("Memulai proses airdrop... Menunggu persetujuan transaksi kedua.", { id: toastId });
         
@@ -134,12 +125,16 @@ export function useCreateTemplate({ onSuccess }: { onSuccess: () => void }) {
         toast.success("Airdrop berhasil!", { id: toastId, description: "Semua token telah berhasil dikirim." });
       } else { // Claim
         toast.loading("Menyimpan daftar klaim ke database...", { id: toastId });
-        const leaves = values.addresses.map(addr => keccak256(addr));
+        
+        const leaves = values.addresses.map(addr => keccak256(addr.toLowerCase()));
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
         const merkleRoot = tree.getHexRoot();
         
+        // FIX: Menambahkan properti `description` dan `imageUrl` yang hilang
         const saveResult = await saveClaimCampaignAction({
             title: values.title,
+            description: values.description,
+            imageUrl: imageUrl,
             contractAddress: newContractAddress,
             merkleRoot,
             metadataUri: metadataURI,

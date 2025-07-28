@@ -12,12 +12,12 @@ import {
   Award,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CurriculumManager } from "@/components/admin/verifiedUser/details/CurriculumManager";
-import { StudentManager } from "@/components/admin/verifiedUser/details/StudentManager";
-import { LandingPageEditor } from "@/components/admin/verifiedUser/courses/LandingPageEditor";
-import { PricingManager } from "@/components/admin/verifiedUser/details/PricingManager";
-import { CourseSettings } from "@/components/admin/verifiedUser/courses/CourseSettings";
-import { CredentialManager } from "@/components/admin/verifiedUser/details/CredentialManager"; // Komponen baru
+import { CurriculumManager } from "@/components/admin/verifiedUser/courses/details/CurriculumManager";
+import { StudentManager } from "@/components/admin/verifiedUser/courses/details/StudentManager";
+import { LandingPageEditor } from "@/components/admin/verifiedUser/courses/details/LandingPageEditor";
+import { PricingManager } from "@/components/admin/verifiedUser/courses/details/PricingManager";
+import { CourseSettings } from "@/components/admin/verifiedUser/courses/details/CourseSettings";
+import { CredentialManager } from "@/components/admin/verifiedUser/courses/details/CredentialManager"; // Komponen baru
 
 export function TemplateDetailView({
   template,

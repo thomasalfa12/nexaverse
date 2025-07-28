@@ -5,11 +5,10 @@ import { cookies } from "next/headers";
 import { recoverMessageAddress, createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import jwt from "jsonwebtoken";
-
+import { prisma } from "@/lib/server/prisma"; // Impor Prisma Client
 import { contracts } from "@/lib/contracts";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-// Pengecekan awal ini bagus untuk menghentikan server saat startup jika tidak ada secret
 if (!JWT_SECRET) {
   throw new Error("Mohon definisikan JWT_SECRET di .env.local");
 }
@@ -42,41 +41,56 @@ export async function POST(req: Request) {
     }
 
     const addr = await recoverMessageAddress({ message, signature });
+    const userAddressLower = addr.toLowerCase(); // FIX: Definisikan di sini untuk digunakan di seluruh fungsi
 
     const roles: string[] = [];
+    let entityId: number | null = null;
 
-//role based admin login
+    // Cek role REGISTRY_ADMIN
     const ownerRegistry = await viemClient.readContract({
       address: contracts.registry.address,
       abi: contracts.registry.abi,
       functionName: 'owner',
     }) as `0x${string}`;
 
-    if (addr.toLowerCase() === ownerRegistry.toLowerCase()) {
+    if (userAddressLower === ownerRegistry.toLowerCase()) {
       roles.push("REGISTRY_ADMIN");
     }
 
+    // Cek role VERIFIED_ENTITY
     const balance = await viemClient.readContract({
       address: contracts.verified.address,
       abi: contracts.verified.abi,
       functionName: 'balanceOf',
-      args: [addr], // Alamat pengguna yang ingin kita periksa
-    }) as bigint; // Hasil dari balanceOf adalah bigint
+      args: [addr],
+    }) as bigint;
 
-    // Jika saldo pengguna lebih besar dari 0, berarti mereka memiliki SBT
-    // dan berhak mendapatkan role VERIFIED_ENTITY.
     if (balance > 0n) {
       roles.push("VERIFIED_ENTITY");
-    }
+      
+      // Jika pengguna adalah VERIFIED_ENTITY, cari ID mereka di database.
+      const entity = await prisma.verifiedEntity.findUnique({
+        where: { 
+          walletAddress: userAddressLower, // FIX: Gunakan variabel yang sudah didefinisikan
+          status: 'REGISTERED' 
+        },
+        select: { id: true }
+      });
 
-    // FIX: Tambahkan pengecekan ini di dalam fungsi untuk meyakinkan TypeScript
-    if (!JWT_SECRET) {
-      throw new Error("JWT_SECRET is not defined.");
+      if (entity) {
+        entityId = entity.id;
+      }
     }
-
-    const tokenPayload = { address: addr, roles };
-    // Sekarang `JWT_SECRET` di sini dijamin sebuah string
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
+    
+    // Buat payload yang lengkap dengan entityId
+    const tokenPayload = { 
+      address: addr, 
+      roles,
+      entityId: entityId
+    };
+    
+    // FIX: Menambahkan non-null assertion (!) untuk meyakinkan TypeScript
+    const token = jwt.sign(tokenPayload, JWT_SECRET!, { expiresIn: "1d" });
     
     const isProd = process.env.NODE_ENV === "production";
     const res = NextResponse.json({ ok: true });

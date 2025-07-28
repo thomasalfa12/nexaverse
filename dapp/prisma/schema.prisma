@@ -75,7 +75,6 @@ model VerifiedEntity {
   sbtClaimProcess   VerifiedSbtClaimProcess?
   createdTemplates  CredentialTemplate[]
   issuedCredentials CuratedCredential[]
-  ClaimCampaign     ClaimCampaign[]
 }
 
 // Melacak proses klaim "Lencana Verified" oleh sebuah entitas.
@@ -130,6 +129,9 @@ model CredentialTemplate {
   enrollments Enrollment[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  merkleRoot      String? // Opsional, hanya diisi untuk kampanye klaim
+  eligibleWallets Json? // Opsional, simpan daftar asli sebagai log
 
   eligibilityList   EligibilityRecord[]
   issuedCredentials CuratedCredential[]
@@ -235,22 +237,4 @@ model CuratedCredential {
   updatedAt DateTime @updatedAt
 
   @@unique([templateId, tokenId])
-}
-
-model ClaimCampaign {
-  id              String @id @default(cuid())
-  title           String
-  contractAddress String @unique
-  merkleRoot      String
-  metadataUri     String
-
-  // Relasi ke kreator, tapi tidak ke CredentialTemplate
-  creatorId Int
-  creator   VerifiedEntity @relation(fields: [creatorId], references: [id])
-
-  // Menyimpan daftar asli untuk referensi
-  eligibleWallets Json
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

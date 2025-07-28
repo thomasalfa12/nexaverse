@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CreateCourseForm } from "./CreateCourseForm";
+import { CreateCourseForm } from "@/components/admin/verifiedUser/courses/CreateCourseForm";
 
 export function CreateCourseDialog({
   isOpen,

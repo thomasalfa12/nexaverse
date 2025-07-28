@@ -29,9 +29,13 @@ export async function GET() {
     }
 
     const templates = await prisma.credentialTemplate.findMany({
-      where: { creatorId: creator.id },
+      where: { 
+        creatorId: creator.id,
+        // PERUBAHAN KUNCI: Tambahkan filter ini untuk memastikan hanya
+        // aset bertipe 'COURSE' yang diambil untuk dasbor ini.
+        templateType: 'COURSE'
+      },
       include: {
-        // FIX UTAMA: Menyertakan data modul untuk setiap template.
         modules: {
           orderBy: { stepNumber: 'asc' }
         },

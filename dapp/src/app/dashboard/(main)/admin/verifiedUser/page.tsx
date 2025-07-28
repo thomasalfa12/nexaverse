@@ -7,8 +7,8 @@ import type { TemplateWithStats } from "@/types";
 import { TemplateListView } from "@/components/admin/verifiedUser/template/TemplateListView";
 import { TemplateDetailView } from "@/components/admin/verifiedUser/template/TemplateDetailView";
 import { CreateCourseDialog } from "@/components/admin/verifiedUser/courses/CreateCourseDialog";
-import { CreateChoiceDialog } from "@/components/admin/verifiedUser/courses/CreateChoiceDialog";
-import { CreateTemplateDialog } from "@/components/admin/verifiedUser/template/CreateTemplateDialog";
+import { CreateChoiceDialog } from "@/components/admin/verifiedUser/template/TemplateChoiceDialog";
+import { CreateCredentialDialog } from "@/components/admin/verifiedUser/credential/CreateCredentialDialog";
 import { Button } from "@/components/ui/button";
 
 export default function VerifiedUserDashboardPage() {
@@ -71,7 +71,7 @@ export default function VerifiedUserDashboardPage() {
         onClose={() => setIsCourseModalOpen(false)}
         onSuccess={handleCreateSuccess}
       />
-      <CreateTemplateDialog
+      <CreateCredentialDialog
         isOpen={isSimpleModalOpen}
         onClose={() => setIsSimpleModalOpen(false)}
         onSuccess={handleCreateSuccess}
