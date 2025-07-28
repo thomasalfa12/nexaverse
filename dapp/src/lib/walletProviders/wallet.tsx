@@ -8,6 +8,7 @@ import {
   lightTheme,
   darkTheme,
 } from "@rainbow-me/rainbowkit";
+import AuthWatcher from "@/components/auth/authWatcher";
 import { WagmiProvider, type State } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -60,7 +61,10 @@ export function Web3Provider({
     >
       <WagmiProvider config={wagmiConfig} initialState={initialState}>
         <QueryClientProvider client={queryClient}>
-          <ThemedRainbowKitProvider>{children}</ThemedRainbowKitProvider>
+          <ThemedRainbowKitProvider>
+            <AuthWatcher />
+            {children}
+          </ThemedRainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
     </ThemeProvider>

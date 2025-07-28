@@ -1,4 +1,3 @@
-// File: contracts/UserSBTFactory.sol
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -6,20 +5,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./UserSBT.sol";
 import "./interfaces/ISBTRegistry.sol";
 
-/**
- * @title UserSBTFactory
- * @author Nexaverse (Arsitektur oleh Gemini)
- * @notice Kontrak ini berfungsi sebagai "pabrik" terpusat untuk men-deploy
- * instance baru dari kontrak UserSBT.
- *
- * --- Pola Arsitektur: Operator Terpercaya ---
- * 1.  Kontrak ini `Ownable`, dan pemiliknya (`owner`) adalah wallet server backend.
- * 2.  Hanya `owner` (server) yang dapat memanggil fungsi `createSbtContract`.
- * 3.  Saat dipanggil, fungsi ini men-deploy kontrak UserSBT baru, tetapi
- * menetapkan kepemilikan (`owner`) dari kontrak baru tersebut kepada
- * `credentialOwner` (kreator/komunitas), bukan kepada server.
- * Ini memastikan kedaulatan penuh bagi kreator atas kredensial mereka.
- */
 contract UserSBTFactory is Ownable {
     // Alamat dari Registry utama kita, ditetapkan saat deploy
     IISBTRegistry public immutable registry;
@@ -27,7 +12,7 @@ contract UserSBTFactory is Ownable {
     // Daftar semua kontrak UserSBT yang telah dibuat untuk pelacakan
     address[] public allSbtContracts;
 
-    // Event yang akan didengarkan oleh backend (baik listener maupun Server Action)
+    // Event yang akan didengarkan oleh frontend untuk mendapatkan alamat kontrak baru
     event SBTContractCreated(
         address indexed newContractAddress,
         address indexed owner, // Pemilik dari kontrak baru (kreator)
@@ -36,35 +21,40 @@ contract UserSBTFactory is Ownable {
     );
 
     /**
-     * @param _registryAddress Alamat dari kontrak ISBTRegistry yang sudah di-deploy.
-     * @param initialOwner Alamat yang akan menjadi pemilik Pabrik ini (wallet server).
+     * @dev Modifier untuk memastikan hanya alamat yang terverifikasi di registry
+     * yang dapat memanggil fungsi.
      */
-    constructor(address _registryAddress, address initialOwner) Ownable(initialOwner) {
-        registry = IISBTRegistry(_registryAddress);
+    modifier onlyVerifiedEntity() {
+        require(
+            registry.isVerifiedEntity(msg.sender),
+            "Factory: Caller is not a verified entity"
+        );
+        _;
     }
 
     /**
-     * @notice Fungsi untuk membuat dan men-deploy instance baru dari UserSBT.
-     * @dev HANYA BISA DIPANGGIL OLEH OWNER (wallet server).
-     * @param name Nama untuk koleksi SBT baru (misal, "Sertifikat Webinar Solidity").
-     * @param symbol Simbol untuk koleksi SBT baru (misal, "NEXA-SOL-ADV").
-     * @param credentialOwner Alamat pengguna/kreator yang akan menjadi pemilik dari kontrak baru.
-     * @return newSbtAddress Alamat dari kontrak UserSBT yang baru saja dibuat.
+     * @param _registryAddress Alamat dari kontrak ISBTRegistry yang sudah di-deploy.
+     * @param initialOwner Alamat yang akan menjadi pemilik Pabrik ini (misalnya, deployer awal).
      */
+    constructor(address _registryAddress, address initialOwner) Ownable(initialOwner) {
+        require(_registryAddress != address(0), "Factory: Registry address cannot be zero");
+        registry = IISBTRegistry(_registryAddress);
+    }
+
     function createSbtContract(
         string memory name,
-        string memory symbol,
-        address credentialOwner
-    ) external onlyOwner returns (address newSbtAddress) {
-        // Keamanan: Pastikan target pemilik adalah entitas yang terverifikasi di Registry
-        require(registry.isVerifiedEntity(credentialOwner), "Factory: Target owner is not a verified entity");
+        string memory symbol
+    ) external onlyVerifiedEntity returns (address newSbtAddress) {
+        // PERUBAHAN KUNCI: Parameter `credentialOwner` dihapus.
+        // `msg.sender` (kreator yang memanggil) secara otomatis menjadi pemilik.
+        address credentialOwner = msg.sender;
 
         // Deploy instance baru dari UserSBT
         UserSBT newUserSbt = new UserSBT(
             address(registry),
             name,
             symbol,
-            credentialOwner // `credentialOwner` menjadi pemilik dari kontrak UserSBT yang baru
+            credentialOwner // `credentialOwner` (yaitu msg.sender) menjadi pemilik dari kontrak UserSBT
         );
 
         newSbtAddress = address(newUserSbt);

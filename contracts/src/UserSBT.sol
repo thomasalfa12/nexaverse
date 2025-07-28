@@ -1,50 +1,22 @@
-// File: contracts/UserSBT.sol
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
-// REFACTOR: Impor interface yang telah diperbarui
 import "./interfaces/ISBTRegistry.sol";
 
-/**
- * @title UserSBT (Refactored)
- * @author Nexaverse (Refactored by Gemini)
- * @notice Kontrak ini adalah template generik untuk menerbitkan kredensial
- * (ijazah, sertifikat, dll.) sebagai SBT kepada pengguna akhir.
- *
- * --- ANALISIS & REFACTORING ---
- * 1.  **Menghapus Batasan "Satu Token per Pengguna":**
- * - Desain sebelumnya (menggunakan `mapping(address => uint256)`) secara fundamental
- * membatasi pengguna untuk hanya bisa memiliki SATU SBT dari kontrak ini.
- * Ini adalah batasan kritis. Bayangkan sebuah universitas yang hanya bisa
- * memberikan satu sertifikat webinar seumur hidup kepada seorang mahasiswa.
- * - REFACTOR: Mapping `ownedToken` dan `issuedBy` telah dihapus. Kontrak sekarang
- * sepenuhnya mengandalkan fungsionalitas standar ERC721 untuk melacak kepemilikan,
- * memungkinkan satu pengguna untuk memiliki BANYAK SBT dari kontrak yang sama.
- *
- * 2.  **Fungsi Berbasis `tokenId`:**
- * - Untuk mendukung banyak token per pengguna, semua fungsi inti (`revoke`, `renewExpiry`,
- * `isExpired`) sekarang beroperasi menggunakan `tokenId` sebagai input utama,
- * bukan alamat `user`. Ini lebih aman, lebih eksplisit, dan bebas ambiguitas.
- *
- * 3.  **Konsistensi Penamaan:**
- * - Semua referensi ke "Institution" telah diubah menjadi "Entity" agar
- * selaras dengan kontrak ISBTRegistry.sol.
- */
-contract UserSBT is ERC721URIStorage, Ownable, Pausable {
+contract UserSBT is ERC721, Ownable, Pausable {
     uint256 public tokenIdCounter;
     IISBTRegistry public immutable registry;
+
+    // REFACTOR: Tambahkan satu variabel untuk menyimpan URI untuk seluruh koleksi.
+    string private _credentialURI;
 
     struct SBTData {
         address issuer;
         uint256 expiry; // 0 = permanen
     }
     
-    // REFACTOR: Menghapus `ownedToken` dan `issuedBy` mappings.
-    // `sbtMetadata` sekarang menjadi satu-satunya sumber kebenaran untuk data token.
     mapping(uint256 => SBTData) public sbtMetadata;
 
     event Minted(address indexed to, uint256 indexed tokenId, uint256 expiry);
@@ -61,9 +33,7 @@ contract UserSBT is ERC721URIStorage, Ownable, Pausable {
         registry = IISBTRegistry(registryAddr);
     }
 
-    // REFACTOR: Nama modifier diubah untuk konsistensi.
     modifier onlyVerifiedEntity() {
-        // REFACTOR: Memanggil fungsi yang benar dari interface.
         require(
             registry.isVerifiedEntity(msg.sender),
             "Caller is not a verified entity"
@@ -71,36 +41,74 @@ contract UserSBT is ERC721URIStorage, Ownable, Pausable {
         _;
     }
 
-    // ------------------------------ CORE LOGIC ------------------------------
+    /**
+     * @notice Override fungsi tokenURI untuk mengembalikan URI kredensial yang sama
+     * untuk semua token dalam koleksi ini.
+     */
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        require(_ownerOf(tokenId) != address(0), "ERC721: URI query for nonexistent token");
+        require(bytes(_credentialURI).length > 0, "UserSBT: Token URI not set");
+        return _credentialURI;
+    }
 
+    /**
+     * @notice Mint satu token. Hanya bisa dipanggil oleh pemilik kontrak.
+     */
     function mint(
         address to,
         string memory uri,
         uint256 expiryTimestamp
-    ) external onlyVerifiedEntity whenNotPaused {
-        // REFACTOR: Menghapus `require(ownedToken[to] == 0, "User already has SBT");`
-        // Sekarang pengguna bisa menerima banyak kredensial dari penerbit yang sama.
+    ) external onlyOwner whenNotPaused {
+        require(to != address(0), "Cannot mint to zero address");
         require(expiryTimestamp == 0 || expiryTimestamp > block.timestamp, "Invalid expiry");
+        
+        // REFACTOR: Set URI hanya jika belum ada.
+        if (bytes(_credentialURI).length == 0) {
+            _credentialURI = uri;
+        }
 
         uint256 id = ++tokenIdCounter;
         _safeMint(to, id);
-        _setTokenURI(id, uri);
-
-        sbtMetadata[id] = SBTData(msg.sender, expiryTimestamp);
-
+        // REFACTOR: Hapus _setTokenURI dari sini.
+        sbtMetadata[id] = SBTData(owner(), expiryTimestamp);
+        
         emit Minted(to, id, expiryTimestamp);
     }
 
-    // REFACTOR: Fungsi sekarang menerima `tokenId` untuk kejelasan.
+    /**
+     * @notice Mint token secara massal. JAUH LEBIH EFISIEN.
+     */
+    function mintBatch(
+        address[] calldata recipients,
+        string calldata uri,
+        uint256 expiryTimestamp
+    ) external onlyOwner whenNotPaused {
+        require(recipients.length > 0, "Empty recipients array");
+        require(expiryTimestamp == 0 || expiryTimestamp > block.timestamp, "Invalid expiry");
+
+        // REFACTOR: Set URI hanya sekali di awal untuk seluruh batch.
+        if (bytes(_credentialURI).length == 0) {
+            _credentialURI = uri;
+        }
+        
+        for (uint256 i = 0; i < recipients.length; i++) {
+            address to = recipients[i];
+            if (to != address(0)) {
+                uint256 id = ++tokenIdCounter;
+                _safeMint(to, id);
+                // REFACTOR: Hapus _setTokenURI dari dalam loop.
+                sbtMetadata[id] = SBTData(owner(), expiryTimestamp);
+                emit Minted(to, id, expiryTimestamp);
+            }
+        }
+    }
+
     function revoke(uint256 tokenId) external onlyVerifiedEntity whenNotPaused {
+        // FIX: Menggunakan _ownerOf untuk memeriksa keberadaan token.
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         require(sbtMetadata[tokenId].issuer == msg.sender, "Caller is not the issuer");
-
-        // `_burn` secara otomatis menangani pembersihan data kepemilikan.
         _burn(tokenId);
-        // Kita hanya perlu membersihkan metadata kustom kita.
         delete sbtMetadata[tokenId];
-        
         emit Revoked(tokenId);
     }
 

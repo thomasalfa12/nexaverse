@@ -7,18 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUM UNTUK STATUS (DIPERBAIKI & DIPERJELAS) ---
+enum TemplateType {
+  COURSE
+  CREDENTIAL
+}
 
-// Enum untuk proses verifikasi awal sebuah entitas oleh Super Admin.
-// Ini akan digunakan di model `VerifiedEntity`.
+// --- ENUM UNTUK STATUS ---
 enum VerificationStatus {
   PENDING
   REGISTERED
   REJECTED
 }
 
-// Enum untuk proses sebuah entitas terverifikasi mengklaim "Lencana Verified" mereka.
-// Sangat selaras dengan kontrak VerifiedEntitySBT.sol dan alur `request -> approve -> claim`.
 enum VerifiedSbtClaimStatus {
   NOT_REQUESTED
   REQUESTED
@@ -26,97 +26,177 @@ enum VerifiedSbtClaimStatus {
   CLAIMED
 }
 
-// Enum untuk siklus hidup Kredensial Pengguna yang sudah diterbitkan.
-// Sangat selaras dengan kontrak UserSBT.sol.
 enum CredentialLifecycleStatus {
   ACTIVE
   REVOKED
   EXPIRED
 }
 
+enum ModuleType {
+  CONTENT // Untuk link video, PDF, atau teks Markdown
+  LIVE_SESSION // Untuk link Zoom/Google Meet
+  SUBMISSION // Untuk portal pengumpulan tugas
+  QUIZ // Untuk masa depan
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PricingType {
+  FREE
+  ONE_TIME
+  SUBSCRIPTION
+}
+
+enum EnrollmentStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 // --- MODEL INTI ---
-
-// Merepresentasikan entitas yang terdaftar di ISBTRegistry.sol (cerminan 1:1)
 model VerifiedEntity {
-  id            Int    @id @default(autoincrement())
-  // SINKRONISASI DENGAN KONTRAK: Menambahkan kembali field yang hilang
-  name          String
-  primaryUrl    String // Sebelumnya officialWebsite
-  contactEmail  String
-  entityType    Int // Sesuai dengan enum EntityType di kontrak
-  walletAddress String @unique
-
-  // FIX: Menggunakan enum yang benar untuk status verifikasi
+  id                 Int                @id @default(autoincrement())
+  name               String
+  bio                String?            @db.Text
+  primaryUrl         String
+  contactEmail       String
+  entityType         Int
+  walletAddress      String             @unique
   status             VerificationStatus @default(PENDING)
   registrationTxHash String?
   registeredAt       DateTime?
-
-  // FIX: Menambahkan timestamp standar
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   // Relasi
   sbtClaimProcess   VerifiedSbtClaimProcess?
   createdTemplates  CredentialTemplate[]
   issuedCredentials CuratedCredential[]
+  ClaimCampaign     ClaimCampaign[]
 }
 
-// PERUBAHAN NAMA: "SbtMint" menjadi "VerifiedSbtClaimProcess" agar lebih jelas.
-// Model ini melacak proses klaim "Lencana Verified" oleh sebuah entitas.
+// Melacak proses klaim "Lencana Verified" oleh sebuah entitas.
 model VerifiedSbtClaimProcess {
-  id       String                 @id @default(cuid())
-  entityId Int                    @unique
-  entity   VerifiedEntity         @relation(fields: [entityId], references: [id])
-  // FIX: Menggunakan enum yang benar untuk alur klaim ini
-  status   VerifiedSbtClaimStatus @default(NOT_REQUESTED)
-
-  // Cerminan dari data di kontrak VerifiedEntitySBT
-  cid     String? // Disimpan sebagai string, dikonversi ke bytes32 saat transaksi
-  tokenId Int?    @unique
-
-  // Pelacakan Transaksi
+  id             String                 @id @default(cuid())
+  entityId       Int                    @unique
+  entity         VerifiedEntity         @relation(fields: [entityId], references: [id])
+  status         VerifiedSbtClaimStatus @default(NOT_REQUESTED)
+  cid            String?
+  tokenId        Int?                   @unique
   requestTxHash  String?
   approvalTxHash String?
   claimTxHash    String?
-
-  // FIX: Menambahkan timestamp standar dan `approvedAt`
-  approvedAt DateTime?
-  claimedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  approvedAt     DateTime?
+  claimedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 }
 
-// Data profil pengguna umum (tidak berubah, sudah bagus)
+// Data profil pengguna umum.
 model Profile {
   id               String              @id @default(cuid())
   walletAddress    String              @unique
   name             String?
   bio              String?
   ownedCredentials CuratedCredential[]
+  submissions      Submission[] // Daftar tugas yang diserahkan oleh pengguna
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+  enrollments      Enrollment[]
 }
 
-// "Blueprint" atau "Paket Kredensial" yang dibuat oleh VerifiedEntity
+// --- MODEL EKOSISTEM LMS ---
+
+// "Paket Kredensial" atau "Kursus" yang dibuat oleh VerifiedEntity.
 model CredentialTemplate {
-  id              String @id @default(cuid())
-  title           String
-  description     String
-  imageUrl        String
-  contractAddress String @unique
+  id                      String         @id @default(cuid())
+  templateType            TemplateType   @default(CREDENTIAL)
+  title                   String
+  description             String
+  imageUrl                String
+  promoVideoUrl           String?
+  contractAddress         String         @unique
+  finalCredentialContract String?        @unique
+  category                String?
+  status                  CourseStatus   @default(DRAFT)
+  creatorId               Int
+  creator                 VerifiedEntity @relation(fields: [creatorId], references: [id])
 
-  creatorId Int
-  creator   VerifiedEntity @relation(fields: [creatorId], references: [id])
-
-  // FIX: Menambahkan timestamp standar
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  modules     CourseModule[]
+  pricing     Pricing[] // BARU: Relasi ke model harga
+  enrollments Enrollment[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   eligibilityList   EligibilityRecord[]
   issuedCredentials CuratedCredential[]
 }
 
-// Daftar pengguna yang berhak mengklaim dari sebuah template
+// Modul di dalam sebuah CredentialTemplate (kursus).
+model CourseModule {
+  id         String             @id @default(cuid())
+  templateId String
+  template   CredentialTemplate @relation(fields: [templateId], references: [id])
+
+  stepNumber      Int
+  title           String
+  type            ModuleType
+  durationMinutes Int?
+
+  // Konten (hanya salah satu yang diisi)
+  contentText String? @db.Text
+  contentUrl  String?
+  quizData    Json?
+
+  // Relasi ke submission tugas
+  submissions Submission[]
+}
+
+model Pricing {
+  id         String             @id @default(cuid())
+  templateId String             @unique
+  template   CredentialTemplate @relation(fields: [templateId], references: [id])
+
+  type     PricingType @default(ONE_TIME)
+  price    Decimal     @default(0.00) @db.Decimal(10, 2)
+  currency String      @default("USD")
+}
+
+model Enrollment {
+  id        String  @id @default(cuid())
+  profileId String
+  student   Profile @relation(fields: [profileId], references: [id])
+
+  templateId String
+  course     CredentialTemplate @relation(fields: [templateId], references: [id])
+
+  status     EnrollmentStatus @default(IN_PROGRESS)
+  progress   Int              @default(0) // Persentase kemajuan (0-100)
+  enrolledAt DateTime         @default(now())
+
+  @@unique([profileId, templateId])
+}
+
+// Penyerahan tugas dari seorang pengguna untuk sebuah modul.
+model Submission {
+  id       String       @id @default(cuid())
+  moduleId String
+  module   CourseModule @relation(fields: [moduleId], references: [id])
+
+  profileId String
+  submitter Profile @relation(fields: [profileId], references: [id])
+
+  fileUrl    String // Link ke file yang diunggah (misal: GitHub, Google Drive)
+  notes      String?
+  isApproved Boolean @default(false)
+
+  submittedAt DateTime @default(now())
+}
+
+// Daftar pengguna yang berhak mengklaim kredensial final dari sebuah template.
 model EligibilityRecord {
   id                String @id @default(cuid())
   userWalletAddress String
@@ -125,7 +205,6 @@ model EligibilityRecord {
   templateId String
   template   CredentialTemplate @relation(fields: [templateId], references: [id])
 
-  // FIX: Menambahkan timestamp standar
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -133,21 +212,16 @@ model EligibilityRecord {
 }
 
 // Cerminan off-chain dari setiap UserSBT yang sudah di-mint.
-// Diisi dan diperbarui oleh Event Listener.
 model CuratedCredential {
-  id      String @id @default(cuid())
-  tokenId String
-
-  // SINKRONISASI DENGAN UserSBT.sol
-  status    CredentialLifecycleStatus @default(ACTIVE)
-  expiresAt DateTime?
-
-  // Metadata yang di-cache
+  id          String                    @id @default(cuid())
+  tokenId     String
+  status      CredentialLifecycleStatus @default(ACTIVE)
+  expiresAt   DateTime?
   title       String
   description String?
   imageUrl    String
 
-  // Relasi untuk konteks
+  // Relasi
   ownerProfileId String
   owner          Profile @relation(fields: [ownerProfileId], references: [id])
 
@@ -157,9 +231,26 @@ model CuratedCredential {
   issuerId Int
   issuer   VerifiedEntity @relation(fields: [issuerId], references: [id])
 
-  // FIX: Menambahkan timestamp standar
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([templateId, tokenId])
+}
+
+model ClaimCampaign {
+  id              String @id @default(cuid())
+  title           String
+  contractAddress String @unique
+  merkleRoot      String
+  metadataUri     String
+
+  // Relasi ke kreator, tapi tidak ke CredentialTemplate
+  creatorId Int
+  creator   VerifiedEntity @relation(fields: [creatorId], references: [id])
+
+  // Menyimpan daftar asli untuk referensi
+  eligibleWallets Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

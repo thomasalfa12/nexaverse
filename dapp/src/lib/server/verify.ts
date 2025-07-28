@@ -21,7 +21,7 @@ export async function getVerifyStatus(address: `0x${string}`): Promise<VerifySta
     const entity = await prisma.verifiedEntity.findUnique({
       where: { walletAddress: lowercasedAddress },
       include: {
-        sbtClaimProcess: true, // Sertakan data proses klaim SBT
+        sbtClaimProcess: true,
       },
     });
 
@@ -31,24 +31,35 @@ export async function getVerifyStatus(address: `0x${string}`): Promise<VerifySta
 
     const claimProcess = entity.sbtClaimProcess;
 
-  return {
-      // 'registered' jika status verifikasi entitas adalah REGISTERED.
+    // DEBUG: Log data untuk debugging
+    console.log("DEBUG - Entity data:", {
+      entityStatus: entity.status,
+      claimProcessExists: !!claimProcess,
+      claimProcessStatus: claimProcess?.status,
+    });
+
+    const result = {
+      // Seharusnya hanya true jika status = REGISTERED (sudah diapprove admin)
       registered: entity.status === VerificationStatus.REGISTERED,
       
-      // 'requested' jika proses klaim sudah dimulai (statusnya bukan NOT_REQUESTED lagi).
-      requested: claimProcess?.status !== VerifiedSbtClaimStatus.NOT_REQUESTED,
+      // Hanya true jika ada claimProcess DAN statusnya bukan NOT_REQUESTED
+      requested: claimProcess ? claimProcess.status !== VerifiedSbtClaimStatus.NOT_REQUESTED : false,
       
-      // 'approved' jika status proses klaim adalah APPROVED atau sudah melewatinya (CLAIMED).
+      // Hanya true jika claimProcess sudah APPROVED atau CLAIMED
       approved:
         claimProcess?.status === VerifiedSbtClaimStatus.APPROVED ||
         claimProcess?.status === VerifiedSbtClaimStatus.CLAIMED,
       
-      // 'claimed' jika status proses klaim adalah CLAIMED.
+      // Hanya true jika claimProcess sudah CLAIMED
       claimed: claimProcess?.status === VerifiedSbtClaimStatus.CLAIMED,
 
-      // Teruskan CID untuk pratinjau di langkah klaim.
       sbtCid: claimProcess?.cid, 
     };
+
+    // DEBUG: Log hasil untuk debugging
+    console.log("DEBUG - Result:", result);
+
+    return result;
   } catch (err) {
     console.error("[getVerifyStatus] error:", err);
     return { registered: false, requested: false, approved: false, claimed: false };

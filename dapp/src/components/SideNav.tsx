@@ -15,6 +15,7 @@ import { useTheme } from "next-themes"; // PERBAIKAN: Impor useTheme
 // --- Impor hook kustom Anda ---
 import { useAuth } from "@/components/auth/AuthProviders";
 import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
+import { useClaims } from "@/hooks/useClaims"; // Impor hook baru
 
 // --- UI & Icons ---
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -64,6 +65,7 @@ import {
   Home,
   LayoutDashboard,
   Moon,
+  Award,
   Sun,
 } from "lucide-react"; // PERBAIKAN: Menambahkan Moon & Sun
 
@@ -409,7 +411,7 @@ function UserMenu() {
   } = useSocialWallet();
   const { address: walletAddr, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-
+  const { claimsCount } = useClaims();
   const loggedIn = isSocial || isConnected;
   const addr = socialAddr || walletAddr;
 
@@ -464,6 +466,16 @@ function UserMenu() {
           <User className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/dashboard/claims")}>
+          <Award className="mr-2 h-4 w-4" />
+          <span>Klaim Saya</span>
+          {claimsCount > 0 && (
+            <Badge variant="secondary" className="ml-auto">
+              {claimsCount}
+            </Badge>
+          )}
+        </DropdownMenuItem>
+
         {/* PERBAIKAN: Menambahkan item menu untuk mengganti tema */}
         <DropdownMenuItem
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

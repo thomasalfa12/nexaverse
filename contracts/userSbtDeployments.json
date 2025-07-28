@@ -6,5 +6,21 @@
     "owner": "0x1797bECa0a380ed51aBA90e2DAa04629839297c8",
     "network": "baseSepolia",
     "deployedAt": "2025-07-22T04:35:45.840Z"
+  },
+  {
+    "name": "Sertifikat Nexaverse",
+    "symbol": "NEXA",
+    "address": "0xa959771206244F1AFe4b8Fbe9798F98886e83B60",
+    "owner": "0x1797bECa0a380ed51aBA90e2DAa04629839297c8",
+    "network": "baseSepolia",
+    "deployedAt": "2025-07-27T16:12:19.523Z"
+  },
+  {
+    "name": "Sertifikat Nexaverse",
+    "symbol": "NEXA",
+    "address": "0x4cb1ce25b7fB752242d84D23db675cF21ff84154",
+    "owner": "0x1797bECa0a380ed51aBA90e2DAa04629839297c8",
+    "network": "baseSepolia",
+    "deployedAt": "2025-07-28T08:31:28.868Z"
   }
 ]

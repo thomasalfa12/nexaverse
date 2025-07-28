@@ -1,5 +1,3 @@
-// File: app/actions/approveSbtAction.ts
-
 "use server";
 
 import { prisma } from "@/lib/server/prisma";
@@ -9,20 +7,19 @@ import { getServerWalletClient } from "@/lib/server/wallet";
 import { contracts } from "@/lib/contracts";
 import { cidToBytes32 } from "@/lib/server/ipfs-utils";
 
+// FIX: Impor fungsi uploader Pinata yang sudah kita buat.
+import { uploadToPinataServer } from "@/lib/pinata-uploader";
+
 export type SbtApprovalRequest = VerifiedSbtClaimProcess & {
   entity: VerifiedEntity;
 };
 
-// SINKRONISASI: Peta ini menerjemahkan `entityType` dari database ke string yang ramah pengguna.
 const entityTypeMap: Record<number, string> = {
-  1: "Institution",
-  2: "Creator",
-  3: "Community",
-  4: "DAO",
+  1: "Institution", 2: "Creator", 3: "Community", 4: "DAO",
 };
 
 function createVerifBadgeSVG(entityName: string, date: string): string {
-  // ... (Kode SVG tidak berubah)
+  // ... (Kode SVG tidak berubah, tetap sama)
   return `
    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;">
       <defs>
@@ -57,51 +54,30 @@ function createVerifBadgeSVG(entityName: string, date: string): string {
 export async function approveSbt(req: SbtApprovalRequest): Promise<{ success: boolean; error?: string }> {
   try {
     const verificationDate = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
-    const svgImage = createVerifBadgeSVG(req.entity.name, verificationDate);
-
-    const pinataJwt = process.env.PINATA_JWT;
-    if (!pinataJwt) throw new Error("PINATA_JWT tidak ditemukan.");
-
-    const imageFormData = new FormData();
-    imageFormData.append('file', new Blob([svgImage], { type: 'image/svg+xml' }), `${req.entity.walletAddress}.svg`);
     
-    const imagePinResponse = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', { /* ... */ });
-    if (!imagePinResponse.ok) {
-      const errorBody = await imagePinResponse.text();
-      throw new Error(`Gagal mengunggah gambar ke Pinata. Status: ${imagePinResponse.status}. Respons: ${errorBody}`);
-    }
-    const { IpfsHash: imageCid } = await imagePinResponse.json();
+    // --- REFACTOR UPLOAD GAMBAR SVG ---
+    const svgImage = createVerifBadgeSVG(req.entity.name, verificationDate);
+    const svgFile = new File([svgImage], `${req.entity.walletAddress}.svg`, { type: 'image/svg+xml' });
+    const imageUrl = await uploadToPinataServer(svgFile);
+    // --- SELESAI REFACTOR UPLOAD GAMBAR ---
 
-    // --- PEMBUATAN METADATA DINAMIS ---
     const metadata = {
       name: `Nexaverse Verified: ${req.entity.name}`,
       description: "This Soulbound Token certifies that this entity has been officially verified by the Nexaverse platform.",
-      image: `ipfs://${imageCid}`,
+      image: imageUrl, // Menggunakan URL dari uploader
       attributes: [
-        { 
-          trait_type: "Entity Type",
-          // FIX: Menggunakan `entityTypeMap` untuk mendapatkan nilai dinamis
-          value: entityTypeMap[req.entity.entityType] ?? "General Entity"
-        },
-        { 
-          trait_type: "Verification Date", 
-          value: verificationDate 
-        },
-        {
-          trait_type: "Primary URL",
-          value: req.entity.primaryUrl
-        }
+        { trait_type: "Entity Type", value: entityTypeMap[req.entity.entityType] ?? "General Entity" },
+        { trait_type: "Verification Date", value: verificationDate },
+        { trait_type: "Primary URL", value: req.entity.primaryUrl }
       ]
     };
 
-    const jsonFormData = new FormData();
-    jsonFormData.append('file', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), `${req.entity.walletAddress}.json`);
+    // --- REFACTOR UPLOAD METADATA JSON ---
+    const jsonFile = new File([JSON.stringify(metadata)], `${req.entity.walletAddress}.json`, { type: 'application/json' });
+    const metadataUrl = await uploadToPinataServer(jsonFile);
+    const metadataCid = metadataUrl.replace('ipfs://', ''); // Ekstrak CID dari URL
+    // --- SELESAI REFACTOR UPLOAD METADATA ---
 
-    const jsonPinResponse = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', { /* ... */ });
-    if (!jsonPinResponse.ok) throw new Error("Gagal mengunggah metadata JSON.");
-    const { IpfsHash: metadataCid } = await jsonPinResponse.json();
-
-    // --- Sisa fungsi (Transaksi On-Chain & Sinkronisasi DB) tidak berubah ---
     const cidBytes32 = cidToBytes32(metadataCid);
     const serverWallet = getServerWalletClient();
 

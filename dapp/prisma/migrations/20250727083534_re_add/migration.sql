@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `CredentialTemplate` ADD COLUMN `templateType` ENUM('COURSE', 'CREDENTIAL') NOT NULL DEFAULT 'CREDENTIAL';

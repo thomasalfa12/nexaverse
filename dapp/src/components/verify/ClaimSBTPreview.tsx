@@ -24,6 +24,15 @@ import {
 } from "lucide-react";
 
 type SbtMetadata = { name: string; description: string; image: string };
+
+// IPFS Gateway fallback list
+const IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs/",
+  "https://cloudflare-ipfs.com/ipfs/",
+  "https://gateway.pinata.cloud/ipfs/",
+  "https://dweb.link/ipfs/",
+];
+
 const InitialClaimView = ({
   metadata,
   isLoading,
@@ -45,13 +54,16 @@ const InitialClaimView = ({
       {isLoading ? (
         <Skeleton className="w-full h-full" />
       ) : metadata?.image ? (
-        // PERBAIKAN: Menggunakan komponen Image
         <Image
           src={metadata.image.replace("ipfs://", "https://ipfs.io/ipfs/")}
           alt="SBT Preview"
-          fill // Mengisi parent container
+          fill
           className="object-cover"
-          sizes="(max-width: 768px) 100vw, 50vw" // Membantu optimasi
+          sizes="(max-width: 768px) 100vw, 50vw"
+          onError={() => {
+            // Fallback jika gambar gagal load
+            console.warn("Image failed to load, showing placeholder");
+          }}
         />
       ) : (
         <ImageOff className="h-16 w-16 text-gray-400" />
@@ -93,7 +105,6 @@ const InitialClaimView = ({
   </motion.div>
 );
 
-// 2. Tampilan Proses: Pelacak visual untuk on-chain & off-chain
 const ProcessTrackerView = ({
   isConfirming,
   isSyncing,
@@ -159,7 +170,6 @@ const ProcessTrackerView = ({
   );
 };
 
-// 3. Tampilan Sukses: Kartu penerimaan akhir
 const ClaimSuccessView = ({
   hash,
   metadata,
@@ -187,7 +197,6 @@ const ClaimSuccessView = ({
       </div>
       <div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 flex items-center justify-center shadow-inner relative group">
         {metadata?.image ? (
-          // PERBAIKAN: Menggunakan komponen Image
           <Image
             src={metadata.image.replace("ipfs://", "https://ipfs.io/ipfs/")}
             alt="SBT Badge"
@@ -215,6 +224,51 @@ const ClaimSuccessView = ({
 };
 
 // ============================================================================
+// --- FUNGSI HELPER UNTUK FETCH METADATA DENGAN RETRY ---
+// ============================================================================
+async function fetchMetadataWithRetry(sbtUri: string): Promise<SbtMetadata> {
+  const cid = sbtUri.replace("ipfs://", "");
+  let lastError: Error | null = null;
+
+  // Coba dengan beberapa gateway IPFS
+  for (const gateway of IPFS_GATEWAYS) {
+    try {
+      const url = `${gateway}${cid}`;
+      console.log(`Trying to fetch metadata from: ${url}`);
+
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000), // 10 detik timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: SbtMetadata = await response.json();
+
+      // Validasi data
+      if (!data.name || !data.description) {
+        throw new Error("Metadata tidak lengkap");
+      }
+
+      console.log(`Successfully fetched metadata from: ${url}`);
+      return data;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`Failed to fetch from ${gateway}: ${lastError.message}`);
+      continue;
+    }
+  }
+
+  // Jika semua gateway gagal
+  throw new Error(
+    `Gagal mengambil metadata dari semua gateway IPFS. Last error: ${
+      lastError?.message || "Unknown error"
+    }`
+  );
+}
+
+// ============================================================================
 // --- KOMPONEN UTAMA (STATE MACHINE) ---
 // ============================================================================
 export function ClaimSBTButton({
@@ -224,7 +278,6 @@ export function ClaimSBTButton({
   onSuccess?: () => void;
   sbtUri?: string | null;
 }) {
-  // --- SEMUA LOGIKA STATE ANDA TETAP UTUH ---
   const { address } = useAccount();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
   const { writeContractAsync } = useWriteContract();
@@ -241,15 +294,20 @@ export function ClaimSBTButton({
       const fetchMetadata = async () => {
         setIsMetadataLoading(true);
         try {
-          const url = sbtUri.replace("ipfs://", "https://ipfs.io/ipfs/");
-          const response = await fetch(url);
-          if (!response.ok)
-            throw new Error("Gagal mengambil metadata dari IPFS.");
-          const data: SbtMetadata = await response.json();
+          const data = await fetchMetadataWithRetry(sbtUri);
           setMetadata(data);
         } catch (error) {
           console.error("Fetch metadata error:", error);
-          toast.error("Gagal memuat pratinjau SBT.");
+
+          // Set fallback metadata jika fetch gagal
+          setMetadata({
+            name: "Nexaverse Verified Entity",
+            description:
+              "This Soulbound Token certifies that this entity has been officially verified by the Nexaverse platform.",
+            image: "", // Empty image akan menampilkan placeholder
+          });
+
+          toast.error("Gagal memuat pratinjau SBT, menggunakan data default.");
         } finally {
           setIsMetadataLoading(false);
         }
@@ -300,9 +358,8 @@ export function ClaimSBTButton({
           }
           toast.success("Status berhasil disinkronkan!");
           setIsProcessComplete(true);
-          // Panggil onSuccess di sini setelah semua selesai
           if (onSuccess) {
-            setTimeout(() => onSuccess(), 3000); // Beri waktu untuk animasi
+            setTimeout(() => onSuccess(), 3000);
           }
         } catch (err: unknown) {
           const errorMessage =

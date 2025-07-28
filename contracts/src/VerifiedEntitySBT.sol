@@ -9,18 +9,6 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 // Impor interface yang telah diperbarui
 import "./interfaces/ISBTRegistry.sol";
 
-/**
- * @title VerifiedEntitySBT
- * @author Nexaverse (Refactored by Gemini)
- * @notice Kontrak ini menerbitkan "Lencana Verifikasi" sebagai SBT kepada entitas
- * (kreator, komunitas, DAO) yang telah terdaftar di ISBTRegistry.
- *
- * --- CATATAN REFACTORING ---
- * 1.  **Konsistensi Penamaan:** Semua referensi ke "Institution" telah diubah
- * menjadi "Entity" agar selaras dengan ISBTRegistry.sol dan visi platform.
- * 2.  **Logika Inti:** Semua logika `request -> approve -> claim` dan optimasi
- * `bytes32 cid` yang telah kita implementasikan tetap dipertahankan.
- */
 contract VerifiedEntitySBT is ERC721, Ownable {
     using Strings for uint256;
 
