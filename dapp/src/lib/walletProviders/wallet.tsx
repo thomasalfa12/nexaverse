@@ -17,7 +17,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const wagmiConfig = getDefaultConfig({
   appName: "Nexaverse",
-  projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID!,
+  projectId: process.env.NEXT_PUBLIC_WCT_PROJECT_ID!,
   chains: [baseSepolia],
   ssr: true, // Pastikan ssr: true tetap ada
 });

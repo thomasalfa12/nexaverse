@@ -1,13 +1,14 @@
+// app/api/admin/courses/[id]/details/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getAuth } from "@/lib/server/auth";
 import { z } from "zod";
 
 const updateDetailsSchema = z.object({
-  title: z.string().min(5, "Judul minimal 5 karakter."),
-  description: z.string().min(10, "Deskripsi minimal 10 karakter."),
-  category: z.string().optional(),
-  promoVideoUrl: z.string().url("URL video tidak valid").or(z.literal("")).optional(),
+  title: z.string().min(5),
+  description: z.string().min(10),
+  category: z.string().min(1),
+  imageUrl: z.string().url().optional(),
 });
 
 export async function PUT(
@@ -16,29 +17,26 @@ export async function PUT(
 ) {
   try {
     const { user } = await getAuth();
-    if (!user?.address || !user.roles.includes("VERIFIED_ENTITY")) {
+    if (!user?.entityId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
     const validation = updateDetailsSchema.safeParse(body);
+
     if (!validation.success) {
-      return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: "Data tidak valid" }, { status: 400 });
     }
 
-    const updatedCourse = await prisma.credentialTemplate.update({
-      where: { id: params.id, creator: { walletAddress: user.address } },
-      data: {
-        title: validation.data.title,
-        description: validation.data.description,
-        category: validation.data.category,
-        promoVideoUrl: validation.data.promoVideoUrl,
-      },
+    // `update` biasa sudah cukup karena kita punya ID unik dan cek keamanan
+    await prisma.credentialTemplate.update({
+      where: { id: params.id, creatorId: user.entityId },
+      data: validation.data,
     });
 
-    return NextResponse.json(updatedCourse);
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error updating course details:", error);
+    console.log("server error", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

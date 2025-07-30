@@ -1,3 +1,5 @@
+// app/dashboard/(main)/page.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -6,110 +8,179 @@ import { Loader2, Search, XCircle } from "lucide-react";
 import type { TemplateWithStats } from "@/types";
 import { CourseCard } from "@/components/discovery/CourseCard";
 import { Input } from "@/components/ui/input";
-import Link from "next/link"; // FIX: Impor komponen Link
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
+// Komponen untuk menampilkan tombol kategori
+const CategoryFilters = ({
+  categories,
+  selected,
+  onSelect,
+}: {
+  categories: string[];
+  selected: string;
+  onSelect: (category: string) => void;
+}) => (
+  <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 mb-12">
+    {["Semua", ...categories].map((category) => (
+      <Button
+        key={category}
+        variant="outline"
+        size="lg"
+        onClick={() => onSelect(category)}
+        className={cn(
+          "rounded-full transition-all duration-200",
+          selected === category
+            ? "border-primary bg-primary/10 text-primary font-semibold ring-2 ring-primary/50"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        )}
+      >
+        {category}
+      </Button>
+    ))}
+  </div>
+);
+
+// Komponen utama halaman
 export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [courses, setCourses] = useState<TemplateWithStats[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+
+  // State untuk filter
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Semua");
 
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch("/api/community/discovery");
-        if (!res.ok) throw new Error("Gagal memuat data kursus.");
-        setCourses(await res.json());
+        // Ambil data kursus dan kategori secara bersamaan
+        const [coursesRes, categoriesRes] = await Promise.all([
+          fetch("/api/community/discovery"),
+          fetch("/api/community/categories"),
+        ]);
+        if (!coursesRes.ok || !categoriesRes.ok) {
+          throw new Error("Gagal memuat data dari server.");
+        }
+        setCourses(await coursesRes.json());
+        setCategories(await categoriesRes.json());
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Terjadi kesalahan.");
       } finally {
         setIsLoading(false);
       }
     };
-    fetchCourses();
+    fetchData();
   }, []);
 
+  // Logika filter yang menggabungkan kategori dan pencarian
   const filteredCourses = useMemo(() => {
-    if (!searchTerm) return courses;
-    return courses.filter(
-      (course) =>
-        course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.creator.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [courses, searchTerm]);
+    return courses
+      .filter((course) => {
+        // Filter berdasarkan kategori
+        if (selectedCategory === "Semua") return true;
+        return course.category === selectedCategory;
+      })
+      .filter((course) => {
+        // Filter berdasarkan pencarian teks
+        if (!searchTerm) return true;
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          course.title.toLowerCase().includes(searchLower) ||
+          course.creator.name.toLowerCase().includes(searchLower)
+        );
+      });
+  }, [courses, selectedCategory, searchTerm]);
 
   const renderContent = () => {
     if (isLoading) {
       return (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="ml-4 text-lg">Memuat Kursus...</p>
         </div>
       );
     }
 
     if (filteredCourses.length > 0) {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <motion.div
+          layout
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        >
           {filteredCourses.map((course) => (
-            // FIX: Membungkus setiap kartu dengan komponen Link ke halaman detail kursus
-            <Link
-              href={`/courses/${course.id}`}
+            <motion.div
               key={course.id}
+              layout
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
               className="h-full"
             >
-              <CourseCard template={course} />
-            </Link>
+              <Link href={`/courses/${course.id}`} className="h-full block">
+                <CourseCard template={course} />
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       );
     }
 
-    if (searchTerm && filteredCourses.length === 0) {
-      return (
-        <div className="text-center py-16">
-          <XCircle className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-xl font-semibold">Tidak Ditemukan</h3>
-          <p className="mt-2 text-muted-foreground">
-            Coba gunakan kata kunci lain.
-          </p>
-        </div>
-      );
-    }
-
+    // Tampilan jika tidak ada hasil yang cocok dengan filter
     return (
-      <div className="text-center py-16">
-        <h3 className="text-xl font-semibold">Belum Ada Kursus</h3>
-        <p className="mt-2 text-muted-foreground">
-          Saat kreator mempublikasikan kursus, kursus akan muncul di sini.
+      <div className="text-center py-20 bg-muted/50 rounded-xl">
+        <XCircle className="mx-auto h-16 w-16 text-muted-foreground/70" />
+        <h3 className="mt-6 text-2xl font-semibold">Tidak Ditemukan</h3>
+        <p className="mt-2 text-muted-foreground max-w-sm mx-auto">
+          Tidak ada kursus yang cocok dengan filter atau pencarian Anda. Coba
+          gunakan kata kunci atau kategori lain.
         </p>
       </div>
     );
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-12 px-4">
+      {/* Hero Section */}
       <div className="text-center mb-10">
-        <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
-          Jelajahi Kursus
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight lg:text-6xl">
+          Jelajahi Ekosistem Kursus
         </h1>
-        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          Temukan kursus dari para kreator terbaik untuk meningkatkan keahlian
-          Anda di dunia Web3.
+        <p className="mt-4 text-lg text-muted-foreground max-w-3xl mx-auto">
+          Temukan pengetahuan baru, tingkatkan keahlian Anda, dan dapatkan
+          kredensial on-chain dari para ahli di dunia Web3.
         </p>
       </div>
-      <div className="mb-8 max-w-xl mx-auto">
+
+      {/* Search Bar */}
+      <div className="mb-8 max-w-2xl mx-auto">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Cari kursus atau kreator..."
-            className="w-full pl-10 h-12 rounded-full"
+            placeholder="Cari berdasarkan judul kursus atau nama kreator..."
+            className="w-full pl-12 h-14 text-base rounded-full shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
-      {renderContent()}
+
+      {/* Filter Kategori */}
+      {!isLoading && categories.length > 0 && (
+        <CategoryFilters
+          categories={categories}
+          selected={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+      )}
+
+      {/* Konten Kursus */}
+      <div className="mt-8">{renderContent()}</div>
     </div>
   );
 }

@@ -57,23 +57,6 @@ export function StudentManager({
     }
   }, [courseId, isSimpleCredential]);
 
-  if (isSimpleCredential) {
-    // UI untuk Kredensial Sederhana (input alamat) tetap di sini
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Manajemen Eligible</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>
-            UI untuk menambahkan alamat wallet eligible akan diimplementasikan
-            di sini.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>

@@ -8,11 +8,13 @@ import React, {
   ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react"; // Impor spinner untuk tampilan loading yang lebih baik
 
 // Tipe data untuk pengguna yang sudah login
 interface UserSession {
   address: string;
   roles: string[];
+  entityId?: number; // Pastikan entityId ada di sini
 }
 
 interface AuthContextType {
@@ -26,13 +28,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Provider utama
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Mulai dengan loading
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Fungsi untuk memeriksa sesi dari server
     const validateSession = async () => {
       try {
-        const res = await fetch("/api/user/session");
+        const res = await fetch("/api/user/session"); // Asumsi endpoint ini ada
         if (!res.ok) throw new Error("No valid session");
         const userData: UserSession = await res.json();
         setUser(userData);
@@ -62,29 +63,32 @@ export const useAuth = () => {
   return context;
 };
 
-// Komponen RouteGuard
+// Komponen RouteGuard yang sudah diperbaiki
 export function RouteGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // Jangan lakukan apa-apa jika masih loading
     if (isLoading) return;
 
-    // Jika tidak terotentikasi dan berada di halaman dashboard, redirect ke home
+    // PERBAIKAN KUNCI: Jika tidak terotentikasi dan mencoba mengakses
+    // area dashboard, arahkan ke halaman `/login`.
     if (!isAuthenticated && pathname.startsWith("/dashboard")) {
-      router.replace("/");
+      router.replace("/login");
     }
   }, [isAuthenticated, isLoading, router, pathname]);
 
-  // Tampilkan loading screen jika sesi masih diperiksa
+  // Tampilkan loading screen yang lebih baik saat sesi diperiksa
   if (isLoading) {
-    return <div>Loading Application...</div>; // Ganti dengan spinner yang lebih baik
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
-  // Jika sudah tidak loading dan tidak diizinkan di halaman ini, jangan render apa-apa
-  // karena redirect sedang berlangsung.
+  // Jika redirect sedang berlangsung, jangan render apa-apa
   if (!isAuthenticated && pathname.startsWith("/dashboard")) {
     return null;
   }

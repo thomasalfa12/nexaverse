@@ -1,14 +1,10 @@
-// src/app/dashboard/layout.tsx
+// src/app/dashboard/(main)/layout.tsx
 
-// --- Impor komponen-komponen yang dibutuhkan ---
 import { RouteGuard } from "@/components/auth/AuthProviders";
 import SideNav from "@/components/SideNav";
+// 1. Impor provider baru Anda
+import { ProfileSetupProvider } from "@/components/auth/ProfileSetupProvider";
 
-/**
- * Layout utama untuk seluruh area dashboard.
- * - Dibungkus dengan RouteGuard untuk memastikan hanya pengguna terotentikasi yang bisa masuk.
- * - Menggunakan komponen SideNav untuk struktur visual (sidebar, header, dll).
- */
 export default function DashboardAreaLayout({
   children,
 }: {
@@ -16,7 +12,10 @@ export default function DashboardAreaLayout({
 }) {
   return (
     <RouteGuard>
-      <SideNav>{children}</SideNav>
+      {/* 2. Bungkus SideNav dan children dengan ProfileSetupProvider */}
+      <ProfileSetupProvider>
+        <SideNav>{children}</SideNav>
+      </ProfileSetupProvider>
     </RouteGuard>
   );
 }

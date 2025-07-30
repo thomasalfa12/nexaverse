@@ -83,6 +83,36 @@
   }
 }
 
+.creator-journey {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Dua kolom */
+  gap: 2rem;
+  padding: 100px 0;
+}
+
+.sticky-visual {
+  position: sticky;
+  top: 100px; /* Jarak dari atas */
+  height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feature-card {
+  background: var(--dark-grey, #2a2a2a); /* Warna dari global.css */
+  border: 1px solid var(--border-color, #444);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 100px; /* Memberi ruang untuk efek scroll */
+  transition: all 0.3s ease;
+}
+
+.feature-card.is-active {
+  border-left: 4px solid var(--accent-gold, #cda434);
+  transform: scale(1.02);
+}
+
 /* --- REKOMENDASI PENGGUNAAN EFEK KACA ---
  *
  * Untuk mendapatkan efek kaca transparan yang sesungguhnya,

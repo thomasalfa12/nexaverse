@@ -1,19 +1,32 @@
 "use client";
-import { useReadContract } from "wagmi";
-import { useAccount } from "wagmi";
-import { contracts } from "@/lib/contracts"; // Impor konfigurasi terpusat
+
+import { useReadContract, useAccount } from "wagmi";
+import { contracts } from "@/lib/contracts";
 
 export function useOnchainEnrollment(courseContractAddress?: `0x${string}`) {
   const { address: userAddress } = useAccount();
 
-  const { data: isEnrolled, isLoading, refetch } = useReadContract({
+  // KUNCI: Kita memanggil fungsi `balanceOf` dari standar ERC721.
+  // Fungsi ini akan mengembalikan jumlah NFT (kredensial kursus) yang
+  // dimiliki oleh pengguna. Jika > 0, berarti mereka sudah terdaftar.
+  const { data: balance, isLoading, refetch } = useReadContract({
     address: courseContractAddress,
-    // FIX: Menggunakan ABI yang lengkap dan benar dari contracts.ts
     abi: contracts.courseManager.abi,
-    functionName: 'checkEnrollment',
-    args: [userAddress],
-    query: { enabled: !!courseContractAddress && !!userAddress },
+    functionName: 'balanceOf',
+    args: userAddress ? [userAddress] : undefined,
+    // Query hanya akan aktif jika kita memiliki alamat kontrak dan alamat pengguna
+    query: { 
+      enabled: !!courseContractAddress && !!userAddress,
+      // Query hanya akan aktif jika kita memiliki alamat kontrak dan alamat pengguna
+    },
   });
 
-  return { isEnrolled: isEnrolled as boolean, isLoading, refetchEnrollment: refetch };
+  // Logika untuk mengubah hasil `balanceOf` (bigint) menjadi `isEnrolled` (boolean)
+  const isEnrolled = typeof balance === "bigint" && balance > 0n;
+
+  return { 
+    isEnrolled, 
+    isLoading, 
+    refetchEnrollment: refetch 
+  };
 }

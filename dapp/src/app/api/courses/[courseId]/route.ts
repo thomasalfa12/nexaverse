@@ -3,10 +3,10 @@ import { prisma } from "@/lib/server/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { courseId: string } }
 ) {
   try {
-    const courseId = params.id;
+    const courseId = params.courseId;
 
     if (!courseId) {
       return NextResponse.json({ error: "ID Kursus tidak valid" }, { status: 400 });
@@ -52,7 +52,7 @@ export async function GET(
     // Jika berhasil, kembalikan data kursus
     return NextResponse.json(course);
   } catch (error) {
-    console.error(`[API ERROR] Gagal mengambil kursus ${params.id}:`, error);
+    console.error(`[API ERROR] Gagal mengambil kursus ${params.courseId}:`, error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

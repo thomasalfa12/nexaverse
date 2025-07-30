@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       secure: isProd,
       sameSite: "lax",
       maxAge: 60 * 60 * 24,
-      path: "/",
+      path: "/login",
     });
 
     return res;

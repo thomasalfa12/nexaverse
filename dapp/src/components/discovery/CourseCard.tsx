@@ -2,9 +2,8 @@
 
 import type { TemplateWithStats } from "@/types";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, User } from "lucide-react";
+import { Layers, User, ArrowRight } from "lucide-react";
 
 const toGatewayURL = (ipfsUri: string) => {
   if (ipfsUri && ipfsUri.startsWith("ipfs://"))
@@ -17,9 +16,14 @@ export function CourseCard({ template }: { template: TemplateWithStats }) {
     Array.isArray(template.modules) && template.modules.length > 0;
 
   return (
-    // Wrapper div ini akan menjadi target dari komponen <Link>
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border bg-background transition-all hover:shadow-xl h-full">
-      <div className="aspect-[16/9] bg-muted overflow-hidden relative">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
+      {/* --- Bagian Gambar --- */}
+      {/* ================================================================
+        FIX: Tambahkan kelas 'relative' di sini. 
+        Ini adalah perbaikan utamanya.
+        ================================================================
+      */}
+      <div className="relative aspect-[16/9] overflow-hidden">
         <Image
           src={toGatewayURL(template.imageUrl)}
           alt={template.title}
@@ -33,33 +37,41 @@ export function CourseCard({ template }: { template: TemplateWithStats }) {
           }}
         />
       </div>
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex-1">
+
+      {/* --- Bagian Konten --- */}
+      <div className="flex flex-1 flex-col justify-between p-4">
+        {/* Konten Utama (Atas) */}
+        <div>
           <Badge variant={isCourse ? "default" : "secondary"}>
             {isCourse ? "Kursus" : "Kredensial"}
           </Badge>
+
           <h3
-            className="mt-2 text-lg font-semibold leading-tight"
+            className="mt-3 text-lg font-semibold leading-tight text-foreground line-clamp-2"
             title={template.title}
           >
             {template.title}
           </h3>
-          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+
+          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
             <User className="h-4 w-4" />
-            <span>{template.creator.name}</span>
+            <span>{template.creator?.name || "Creator Tanpa Nama"}</span>
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+
+        {/* Footer Kartu (Bawah) */}
+        <div className="mt-4 flex items-center justify-between text-sm">
           {isCourse && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
               <Layers className="h-4 w-4" />
               <span>{template.modules?.length} Modul</span>
             </div>
           )}
-          {/* Tombol ini sekarang hanya untuk visual, karena seluruh kartu bisa diklik */}
-          <Button size="sm" className="w-full mt-2" tabIndex={-1}>
-            Lihat Detail
-          </Button>
+
+          <div className="flex items-center gap-1 text-primary font-semibold opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <span>Lihat</span>
+            <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+          </div>
         </div>
       </div>
     </div>

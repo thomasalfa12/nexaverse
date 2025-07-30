@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link"; // 1. Impor Link
 import type { TemplateWithStats } from "@/types";
 import { CourseHeader } from "@/components/course/CourseHeader";
 import { CourseCurriculum } from "@/components/course/CourseCurriculum";
 import { InstructorBio } from "@/components/course/InstructorBio";
 import { PricingBox } from "@/components/course/PricingBox";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft } from "lucide-react";
 import { useOnchainEnrollment } from "@/hooks/useOnchainEnrollment";
+import { Button } from "@/components/ui/button";
 
 export default function CourseLandingPage() {
   const params = useParams();
@@ -51,18 +53,27 @@ export default function CourseLandingPage() {
   return (
     <div>
       <CourseHeader course={course} />
-      <div className="container mx-auto py-12 grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-        <div className="lg:col-span-2 space-y-12">
-          <CourseCurriculum modules={course.modules || []} />
-          <InstructorBio creator={course.creator} />
-        </div>
-        <div className="lg:col-span-1">
-          <PricingBox
-            course={course}
-            isEnrolled={isEnrolled}
-            isCheckingEnrollment={isCheckingEnrollment}
-            onEnrollSuccess={refetchEnrollment}
-          />
+      <div className="container mx-auto py-12">
+        {/* 2. Ubah tombol menjadi Link yang mengarah ke halaman discovery */}
+        <Button variant="ghost" asChild className="mb-8 -ml-4">
+          <Link href="/dashboard">
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Kembali ke Discovery
+          </Link>
+        </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
+          <div className="lg:col-span-2 space-y-12">
+            <CourseCurriculum modules={course.modules || []} />
+            <InstructorBio creator={course.creator} />
+          </div>
+          <div className="lg:col-span-1">
+            <PricingBox
+              course={course}
+              isEnrolled={isEnrolled}
+              isCheckingEnrollment={isCheckingEnrollment}
+              onEnrollSuccess={refetchEnrollment}
+            />
+          </div>
         </div>
       </div>
     </div>

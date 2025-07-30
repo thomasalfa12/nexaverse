@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CurriculumManager } from "@/components/admin/verifiedUser/courses/details/CurriculumManager";
 import { StudentManager } from "@/components/admin/verifiedUser/courses/details/StudentManager";
-import { LandingPageEditor } from "@/components/admin/verifiedUser/courses/details/LandingPageEditor";
+import { CourseCardManager } from "@/components/admin/verifiedUser/courses/details/CardManager";
 import { PricingManager } from "@/components/admin/verifiedUser/courses/details/PricingManager";
 import { CourseSettings } from "@/components/admin/verifiedUser/courses/details/CourseSettings";
 import { CredentialManager } from "@/components/admin/verifiedUser/courses/details/CredentialManager"; // Komponen baru
@@ -71,7 +71,7 @@ export function TemplateDetailView({
           <CurriculumManager courseId={template.id} />
         </TabsContent>
         <TabsContent value="landing-page" className="mt-4">
-          <LandingPageEditor course={template} />
+          <CourseCardManager course={template} />
         </TabsContent>
         <TabsContent value="pricing" className="mt-4">
           <PricingManager courseId={template.id} />
