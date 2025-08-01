@@ -1,9 +1,9 @@
 "use server";
 
-import { uploadToPinata, uploadJsonToPinata } from "@/lib/pinata-uploader";
-import { getAuth } from "@/lib/server/auth";
+// 1. Impor dari library baru kita
+import { uploadFileToIPFS, uploadJsonToIPFS } from "@/lib/ipfs-uploader";
+import { getAppSession } from "@/lib/auth";
 
-// FIX: Menambahkan `imageUrl` ke interface hasil
 interface MetadataResult {
   success: boolean;
   error?: string;
@@ -13,8 +13,11 @@ interface MetadataResult {
 
 export async function prepareTemplateMetadataAction(formData: FormData): Promise<MetadataResult> {
   try {
-    const { user } = await getAuth();
-    if (!user?.address) return { success: false, error: "Unauthorized" };
+    const session = await getAppSession();
+    // 2. Sesuaikan pengecekan otentikasi
+    if (!session?.user?.address) {
+      return { success: false, error: "Unauthorized" };
+    }
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
@@ -25,11 +28,13 @@ export async function prepareTemplateMetadataAction(formData: FormData): Promise
       return { success: false, error: "Data tidak lengkap untuk metadata." };
     }
 
-    const imageUrl = await uploadToPinata(imageFile);
+    // 3. Gunakan fungsi upload file yang baru
+    const imageUrl = await uploadFileToIPFS(imageFile);
     const metadata = { name: title, description, image: imageUrl };
-    const metadataURI = await uploadJsonToPinata(metadata, `${symbol}-metadata.json`);
+    
+    // 4. Gunakan fungsi upload JSON yang baru
+    const metadataURI = await uploadJsonToIPFS(metadata, `${symbol}-metadata.json`);
 
-    // FIX: Mengembalikan `imageUrl` di dalam objek hasil
     return { success: true, metadataURI, imageUrl };
   } catch (err) {
     return { success: false, error: (err as Error).message };

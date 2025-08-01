@@ -38,3 +38,4 @@ export interface ClaimableRecord extends PrismaEligibilityRecord {
     creator: Pick<VerifiedEntity, 'name'>;
   };
 }
+

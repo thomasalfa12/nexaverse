@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+import { getAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 interface SaveResult { success: boolean; error?: string; }

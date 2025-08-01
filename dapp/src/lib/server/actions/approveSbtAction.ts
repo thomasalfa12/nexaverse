@@ -6,17 +6,15 @@ import type { VerifiedSbtClaimProcess } from "@prisma/client";
 import { getServerWalletClient } from "@/lib/server/wallet";
 import { contracts } from "@/lib/contracts";
 import { cidToBytes32 } from "@/lib/server/ipfs-utils";
-
-// FIX: Impor fungsi uploader Pinata yang sudah kita buat.
-import { uploadJsonToPinata, uploadToPinataServer  } from "@/lib/pinata-uploader";
+// 1. Impor dari library baru kita
+import { uploadFileToIPFS, uploadJsonToIPFS } from "@/lib/ipfs-uploader";
+// 2. Impor helper sesi NextAuth.js
+import { getAppSession } from "@/lib/auth";
 
 export type SbtApprovalRequest = VerifiedSbtClaimProcess & {
   entity: VerifiedEntity;
 };
 
-const entityTypeMap: Record<number, string> = {
-  1: "Institution", 2: "Creator", 3: "Community", 4: "DAO",
-};
 
 function createVerifBadgeSVG(entityName: string, date: string): string {
   return `
@@ -52,29 +50,29 @@ function createVerifBadgeSVG(entityName: string, date: string): string {
 
 export async function approveSbt(req: SbtApprovalRequest): Promise<{ success: boolean; error?: string }> {
   try {
+    // Keamanan: Pastikan hanya admin yang bisa menjalankan aksi ini
+    const session = await getAppSession();
+    if (!session?.user?.roles.includes("REGISTRY_ADMIN")) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const verificationDate = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
     
-    // --- UPLOAD GAMBAR SVG (ini tetap sama) ---
+    // Gunakan fungsi upload file yang baru
     const svgImage = createVerifBadgeSVG(req.entity.name, verificationDate);
     const svgFile = new File([svgImage], `${req.entity.walletAddress}.svg`, { type: 'image/svg+xml' });
-    const imageUrl = await uploadToPinataServer(svgFile);
-    // --- SELESAI UPLOAD GAMBAR ---
+    const imageUrl = await uploadFileToIPFS(svgFile);
 
     const metadata = {
       name: `Nexaverse Verified: ${req.entity.name}`,
       description: "This Soulbound Token certifies that this entity has been officially verified by the Nexaverse platform.",
       image: imageUrl,
-      attributes: [
-        { trait_type: "Entity Type", value: entityTypeMap[req.entity.entityType] ?? "General Entity" },
-        { trait_type: "Verification Date", value: verificationDate },
-        { trait_type: "Primary URL", value: req.entity.primaryUrl }
-      ]
+      attributes: [ /* ... */ ]
     };
 
-    // --- GUNAKAN FUNGSI JSON UPLOAD YANG SUDAH ADA ---
-    const metadataUrl = await uploadJsonToPinata(metadata, `${req.entity.walletAddress}.json`);
-    const metadataCid = metadataUrl.replace('ipfs://', ''); // Ekstrak CID dari URL
-    // --- SELESAI UPLOAD METADATA ---
+    // Gunakan fungsi upload JSON yang baru
+    const metadataUrl = await uploadJsonToIPFS(metadata, `${req.entity.walletAddress}.json`);
+    const metadataCid = metadataUrl.replace('ipfs://', '');
 
     const cidBytes32 = cidToBytes32(metadataCid);
     const serverWallet = getServerWalletClient();

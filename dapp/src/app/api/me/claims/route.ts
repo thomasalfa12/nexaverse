@@ -1,18 +1,22 @@
+// app/api/me/claims/route.ts
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 
 export async function GET() {
   try {
-    const { user } = await getAuth();
-    if (!user?.address) {
+    // GANTI: Gunakan getAppSession untuk mendapatkan data sesi
+    const session = await getAppSession();
+
+    // Sesuaikan pengecekan dengan objek sesi yang baru
+    if (!session?.user?.address) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userWallet = user.address.toLowerCase();
+    const userWallet = session.user.address.toLowerCase();
 
-    // KUNCI: Query ini sekarang akan berhasil karena `saveClaimCampaignAction`
-    // telah membuat `EligibilityRecord` yang diperlukan.
     const claimableRecords = await prisma.eligibilityRecord.findMany({
       where: {
         userWalletAddress: userWallet,
@@ -22,7 +26,6 @@ export async function GET() {
         }
       },
       include: {
-        // Sertakan detail dari template yang bisa diklaim
         template: {
           include: {
             creator: {

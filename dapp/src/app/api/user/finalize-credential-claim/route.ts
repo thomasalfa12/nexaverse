@@ -2,47 +2,59 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// 1. GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
+import { z } from "zod";
+
+// Skema untuk memvalidasi data yang masuk
+const finalizeClaimSchema = z.object({
+  templateId: z.string().cuid("Template ID tidak valid."),
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Format Transaction Hash tidak valid."),
+});
 
 export async function POST(req: Request) {
   try {
-    // 1. Otentikasi & Otorisasi
-    const { user } = await getAuth();
-    if (!user?.address) {
+    // 1. Otentikasi & Otorisasi menggunakan NextAuth.js
+    const session = await getAppSession();
+    if (!session?.user?.address) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { templateId, txHash } = await req.json();
-    if (!templateId || !txHash) {
-      return NextResponse.json({ error: "Template ID or Transaction Hash is missing" }, { status: 400 });
+    // 2. Validasi input body
+    const body = await req.json();
+    const validation = finalizeClaimSchema.safeParse(body);
+    if (!validation.success) {
+        return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
     }
+    const { templateId } = validation.data;
 
-    // 2. Cari record kelayakan yang sesuai
+    // 3. Cari record kelayakan yang sesuai
     const eligibilityRecord = await prisma.eligibilityRecord.findUnique({
       where: {
         templateId_userWalletAddress: {
           templateId: templateId,
-          userWalletAddress: user.address,
+          userWalletAddress: session.user.address,
         },
       },
     });
 
-    // 3. Pastikan record ada dan statusnya ELIGIBLE
+    // 4. Pastikan record ada dan statusnya ELIGIBLE
     if (!eligibilityRecord || eligibilityRecord.status !== "ELIGIBLE") {
-      return NextResponse.json({ error: "No eligible record found to claim" }, { status: 404 });
+      return NextResponse.json({ error: "Tidak ditemukan data yang berhak untuk diklaim." }, { status: 404 });
     }
 
-    // 4. Update status menjadi CLAIMED
+    // 5. Update status menjadi CLAIMED
     await prisma.eligibilityRecord.update({
       where: {
         id: eligibilityRecord.id,
       },
       data: {
         status: "CLAIMED",
+        // Anda bisa menyimpan txHash di sini jika ada kolomnya
       },
     });
 
-    // Catatan: Pembuatan entri di `CuratedSbt` akan ditangani oleh Event Listener
+    // Catatan: Pembuatan entri di `CuratedCredential` akan ditangani oleh Event Listener
     // untuk memastikan sinkronisasi yang lebih andal.
 
     return NextResponse.json({ success: true });

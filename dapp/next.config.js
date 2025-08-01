@@ -22,6 +22,14 @@ const nextConfig = {
         port: "",
         pathname: '/ipfs/**',
       },
+       {
+        protocol: 'https',
+        hostname: 'utfs.io', // Untuk UploadThing
+      },
+      {
+        protocol: "https",
+        hostname: 'api.dicebear.com', // <-- TAMBAHKAN INI
+      },
       {
         protocol: "https",
         hostname: 'i.pravatar.cc',

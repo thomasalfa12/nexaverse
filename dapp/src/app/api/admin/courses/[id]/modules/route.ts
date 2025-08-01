@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+import { getAppSession } from "@/lib/auth";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
@@ -22,62 +22,86 @@ const moduleSchema = z.object({
   }).optional(),
 });
 
-// Mengambil semua modul untuk sebuah kursus
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+// Handler untuk MENDAPATKAN semua modul untuk sebuah kursus
+export async function GET(
+  req: Request,
+  { params }: { params: { courseId: string } }
+) {
   try {
-    const { user } = await getAuth();
-    if (!user?.address || !user.roles.includes("VERIFIED_ENTITY")) {
+    const session = await getAppSession();
+    if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY") || !session.user.entityId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Query yang aman, memastikan user hanya bisa melihat modul dari kursus miliknya
     const modules = await prisma.courseModule.findMany({
       where: { 
-        templateId: params.id,
-        template: { creator: { walletAddress: user.address } } // Keamanan
+        templateId: params.courseId,
+        template: { 
+            creatorId: session.user.entityId 
+        }
       },
       orderBy: { stepNumber: 'asc' },
     });
+
     return NextResponse.json(modules);
   } catch (error) {
-    console.error("Error fetching modules:", error);
+    console.error(`[API GET Modules Error] for course ${params.courseId}:`, error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
-// Membuat modul baru (sekarang bisa menangani kuis)
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+// Handler untuk MEMBUAT modul baru
+export async function POST(
+  req: Request,
+  { params }: { params: { courseId: string } }
+) {
     try {
-        const { user } = await getAuth();
-        if (!user?.address || !user.roles.includes("VERIFIED_ENTITY")) {
+        const session = await getAppSession();
+        if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY") || !session.user.entityId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        // 1. Verifikasi kepemilikan kursus SEBELUM membuat modul
+        const course = await prisma.credentialTemplate.findFirst({
+            where: { 
+                id: params.courseId,
+                creatorId: session.user.entityId
+            },
+            select: { _count: { select: { modules: true } } } // Ambil jumlah modul saat ini
+        });
+
+        if (!course) {
+            return NextResponse.json({ error: "Course not found or you do not have permission to add modules to it." }, { status: 404 });
+        }
+
+        // 2. Lanjutkan dengan validasi dan pembuatan jika kepemilikan sah
         const body = await req.json();
         const validation = moduleSchema.safeParse(body);
         if (!validation.success) {
             return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
         }
         
-        const moduleCount = await prisma.courseModule.count({ where: { templateId: params.id } });
+        const { title, type, contentText, contentUrl, quizData } = validation.data;
+        const moduleCount = course._count.modules;
 
         const newModule = await prisma.courseModule.create({
             data: {
-                title: validation.data.title,
-                type: validation.data.type,
-                contentText: validation.data.contentText,
-                contentUrl: validation.data.contentUrl || null,
-                // FIX: Menghilangkan `any` dengan melakukan casting ke tipe `Prisma.InputJsonValue`
-                // yang merupakan cara aman untuk menangani input JSON di Prisma.
-                quizData: validation.data.type === 'QUIZ' 
-                    ? (validation.data.quizData as Prisma.InputJsonValue) 
+                title,
+                type,
+                contentText,
+                contentUrl: contentUrl || null,
+                quizData: type === 'QUIZ' && quizData 
+                    ? (quizData as Prisma.InputJsonValue) 
                     : Prisma.JsonNull,
-                templateId: params.id,
-                stepNumber: moduleCount + 1,
+                templateId: params.courseId,
+                stepNumber: moduleCount + 1, // Tentukan urutan modul secara otomatis
             }
         });
 
         return NextResponse.json(newModule, { status: 201 });
     } catch (error) {
-        console.error("Error creating module:", error);
+        console.error(`[API POST Module Error] for course ${params.courseId}:`, error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

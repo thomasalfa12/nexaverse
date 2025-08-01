@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// 1. GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 interface SaveResult { success: boolean; error?: string; }
@@ -20,17 +21,18 @@ export async function saveClaimCampaignAction(data: CampaignData): Promise<SaveR
     console.log("Data yang diterima:", JSON.stringify(data, null, 2));
 
     try {
-        console.log("Langkah 1: Mencoba memanggil getAuth()...");
-        const { user } = await getAuth();
-        console.log(" -> getAuth() berhasil.");
+        console.log("Langkah 1: Mencoba mendapatkan sesi pengguna...");
+        // 2. GANTI: Gunakan getAppSession untuk mendapatkan data sesi
+        const session = await getAppSession();
+        console.log(" -> Sesi berhasil didapatkan.");
 
-        if (!user?.address || !user.entityId) {
+        // 3. GANTI: Pengecekan otentikasi & otorisasi dengan objek sesi baru
+        if (!session?.user?.id || !session.user.entityId) {
             console.error("[ACTION FAIL] Gagal otentikasi pengguna.");
             return { success: false, error: "Unauthorized" };
         }
-        console.log(`Langkah 2: Pengguna diautentikasi: ${user.address} (Entity ID: ${user.entityId})`);
+        console.log(`Langkah 2: Pengguna diautentikasi: ${session.user.address} (Entity ID: ${session.user.entityId})`);
 
-        // Kita akan coba membuat template di luar transaksi terlebih dahulu
         console.log("Langkah 3: Mencoba membuat CredentialTemplate...");
         const newTemplate = await prisma.credentialTemplate.create({
             data: {
@@ -39,7 +41,7 @@ export async function saveClaimCampaignAction(data: CampaignData): Promise<SaveR
                 description: data.description,
                 imageUrl: data.imageUrl,
                 contractAddress: data.contractAddress,
-                creatorId: user.entityId,
+                creatorId: session.user.entityId, // Gunakan entityId dari sesi
                 status: 'PUBLISHED',
                 merkleRoot: data.merkleRoot,
                 eligibleWallets: data.eligibleWallets
@@ -66,7 +68,6 @@ export async function saveClaimCampaignAction(data: CampaignData): Promise<SaveR
         console.log("--- [ACTION SUCCESS] saveClaimCampaignAction selesai dengan sukses ---");
         return { success: true };
     } catch (err) {
-        // Jika error terjadi, sekarang PASTI akan tertangkap dan ditampilkan di sini.
         console.error("!!! [ACTION FAIL] Terjadi error fatal di dalam saveClaimCampaignAction:", err);
         return { success: false, error: (err as Error).message };
     }

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Asumsikan Anda memiliki hook `useAuth` dari `AuthProviders` Anda
-// yang memberikan status otentikasi dari backend.
-import { useAuth } from "@/components/auth/AuthProviders";
+import { useSession } from "next-auth/react";
 import { ProfileSetupModal } from "./ProfileSetupModal";
 
 export function ProfileSetupProvider({
@@ -11,39 +9,46 @@ export function ProfileSetupProvider({
 }: {
   children: React.ReactNode;
 }) {
-  // Gunakan status otentikasi backend, bukan hanya status koneksi dompet
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const [needsProfile, setNeedsProfile] = useState(false);
+  const { data: session, status, update } = useSession();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // State ini adalah kunci untuk memutus loop.
+  const [setupJustCompleted, setSetupJustCompleted] = useState(false);
 
   useEffect(() => {
-    // Hanya periksa jika proses pengecekan otentikasi selesai dan pengguna terotentikasi
-    if (isAuthenticated && !isAuthLoading) {
-      const checkProfile = async () => {
-        try {
-          const res = await fetch("/api/me/profile/status");
-          if (res.ok) {
-            const data = await res.json();
-            // Tampilkan modal jika API mengatakan `hasProfile` adalah `false`
-            setNeedsProfile(!data.hasProfile);
-          }
-        } catch (error) {
-          console.error("Failed to check profile status:", error);
-        }
-      };
-      checkProfile();
+    // Tampilkan modal HANYA JIKA:
+    // 1. Sesi sudah terotentikasi.
+    // 2. Profil pengguna belum lengkap.
+    // 3. Proses setup TIDAK baru saja selesai.
+    if (
+      !setupJustCompleted &&
+      status === "authenticated" &&
+      session.user?.profileComplete === false
+    ) {
+      setIsModalOpen(true);
     } else {
-      // Jika pengguna tidak terotentikasi, pastikan modal disembunyikan
-      setNeedsProfile(false);
+      // Dalam kasus lain, pastikan modal tertutup.
+      setIsModalOpen(false);
     }
-  }, [isAuthenticated, isAuthLoading]); // Jalankan ulang efek saat status otentikasi berubah
+  }, [session, status, setupJustCompleted]);
+
+  const handleFinishSetup = async () => {
+    // 1. Set flag ini menjadi `true` SEKARANG. Ini akan mencegah useEffect
+    //    di atas untuk membuka kembali modal berdasarkan data sesi yang lama.
+    setSetupJustCompleted(true);
+
+    // 2. Tutup modal secara visual untuk UX yang instan.
+    setIsModalOpen(false);
+
+    // 3. Minta NextAuth untuk menyegarkan data sesi di latar belakang.
+    // Setelah ini selesai, `session.user.profileComplete` akan menjadi `true`.
+    await update();
+  };
 
   return (
     <>
       {children}
-      <ProfileSetupModal
-        isOpen={needsProfile}
-        onFinished={() => setNeedsProfile(false)}
-      />
+      <ProfileSetupModal isOpen={isModalOpen} onFinished={handleFinishSetup} />
     </>
   );
 }

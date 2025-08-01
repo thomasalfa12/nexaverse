@@ -2,7 +2,8 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// 1. GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 
 /**
  * GET: Memeriksa status kelayakan pengguna yang sedang login
@@ -11,15 +12,18 @@ import { getAuth } from "@/lib/server/auth";
  */
 export async function GET() {
   try {
-    const { user } = await getAuth();
-    if (!user?.address) {
+    // 2. GANTI: Gunakan getAppSession untuk mendapatkan data sesi
+    const session = await getAppSession();
+    
+    // 3. GANTI: Pengecekan sesi yang benar
+    if (!session?.user?.address) {
       // Jika tidak ada pengguna, kembalikan objek kosong
       return NextResponse.json({});
     }
 
     const eligibilityRecords = await prisma.eligibilityRecord.findMany({
       where: {
-        userWalletAddress: user.address,
+        userWalletAddress: session.user.address,
       },
       select: {
         templateId: true,

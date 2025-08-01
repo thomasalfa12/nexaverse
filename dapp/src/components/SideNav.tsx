@@ -7,14 +7,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
 // --- Impor dari library ---
-import { useAccount, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes"; // PERBAIKAN: Impor useTheme
-
-// --- Impor hook kustom Anda ---
-import { useAuth } from "@/components/auth/AuthProviders";
-import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
+import { useSession, signOut } from "next-auth/react";
 import { useClaims } from "@/hooks/useClaims"; // Impor hook baru
 
 // --- UI & Icons ---
@@ -133,7 +129,9 @@ const filterMenuByRoles = (
 export default function SideNav({ children }: { children: React.ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const pathname = usePathname();
-  const { user, isLoading } = useAuth();
+  const { data: session, status } = useSession(); // <-- Panggilan baru
+  const isLoading = status === "loading";
+  const user = session?.user;
   const userRoles = user?.roles || [];
   const accessibleMenu = filterMenuByRoles(menuConfig, userRoles);
 
@@ -402,43 +400,36 @@ function NavItem({
 
 function UserMenu() {
   const router = useRouter();
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const { theme, setTheme } = useTheme(); // PERBAIKAN: Menambahkan hook useTheme
-  const {
-    isLoggedIn: isSocial,
-    address: socialAddr,
-    logout: socialLogout,
-  } = useSocialWallet();
-  const { address: walletAddr, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { theme, setTheme } = useTheme();
   const { claimsCount } = useClaims();
-  const loggedIn = isSocial || isConnected;
-  const addr = socialAddr || walletAddr;
 
+  // GANTI: Semua state management sekarang terpusat di useSession
+  const { data: session, status } = useSession();
+
+  // GANTI: Fungsi logout menjadi jauh lebih sederhana
   const handleLogout = async () => {
-    await fetch("/api/user/logout", { method: "POST" });
-    if (isSocial) await socialLogout();
-    else if (isConnected) disconnect();
-    router.replace("/");
+    // signOut akan menghapus cookie sesi dan mengarahkan pengguna
+    await signOut({ callbackUrl: "/" });
   };
 
-  if (isAuthLoading) {
+  // GANTI: Pengecekan status loading
+  if (status === "loading") {
     return <Skeleton className="h-10 w-10 rounded-full" />;
   }
 
-  if (!loggedIn) {
+  // GANTI: Pengecekan status tidak terotentikasi
+  if (status === "unauthenticated") {
     return (
       <Button onClick={() => router.push("/")}>
         <LogIn className="mr-2 h-4 w-4" /> Sign In
       </Button>
     );
   }
-
-  // PERBAIKAN: Menggunakan optional chaining untuk mengakses properti user dengan aman
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userName = (user as any)?.name;
+  // GANTI: Sumber data pengguna sekarang tunggal, yaitu dari `session`
+  const addr = session?.user?.address;
+  const userName = session?.user?.name;
   const userInitial = userName
-    ? userName.charAt(0)
+    ? userName.charAt(0).toUpperCase()
     : addr?.slice(2, 4).toUpperCase();
 
   return (

@@ -1,57 +1,49 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// 1. GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { courseId: string } }
 ) {
   try {
-    // 1. Otentikasi: Pastikan pengguna sudah login.
-    const { user } = await getAuth();
-    if (!user?.address) {
+    // 1. Otentikasi: Pastikan pengguna sudah login menggunakan NextAuth.js.
+    const session = await getAppSession();
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Cari atau Buat Profil Pengguna (Upsert Logic)
-    // FIX: Menggunakan `upsert` untuk membuat profil jika belum ada.
-    // Ini menyelesaikan masalah error 404 "Profil tidak ditemukan".
-    const profile = await prisma.profile.upsert({
-      where: { walletAddress: user.address },
-      update: {}, // Tidak ada yang perlu diupdate jika profil sudah ada
-      create: {
-        walletAddress: user.address,
-        // Anda bisa menambahkan nama default di sini jika diinginkan
-        // name: "New Nexaverse User"
-      }
-    });
-
-    const courseId = params.id;
+    // 2. HAPUS: Logika upsert profil tidak lagi diperlukan.
+    // Jika sesi valid, kita sudah dijamin memiliki data User di database.
+    const userId = session.user.id;
+    const courseId = params.courseId;
 
     // 3. Cek Pendaftaran yang Sudah Ada: Cegah pendaftaran ganda.
     const existingEnrollment = await prisma.enrollment.findUnique({
       where: { 
-        profileId_templateId: { 
-          profileId: profile.id, 
+        // Menggunakan indeks unik gabungan yang baru dari skema Anda
+        userId_templateId: { 
+          userId: userId, 
           templateId: courseId 
         } 
       }
     });
+
     if (existingEnrollment) {
-      // Mengembalikan status 200 OK dengan pesan karena ini bukan error,
-      // pengguna hanya mencoba mendaftar lagi.
       return NextResponse.json({ message: "Anda sudah terdaftar di kursus ini." }, { status: 200 });
     }
 
     // 4. Logika Pembayaran (Placeholder): Di aplikasi nyata, di sinilah
-    //    Anda akan memverifikasi pembayaran crypto sebelum melanjutkan.
+    //    Anda akan memverifikasi pembayaran sebelum melanjutkan.
     //    Untuk saat ini, kita asumsikan kursus gratis.
 
     // 5. Buat Pendaftaran Baru: Simpan data pendaftaran ke database.
     const newEnrollment = await prisma.enrollment.create({
       data: {
-        profileId: profile.id,
+        userId: userId,
         templateId: courseId,
+        status: 'IN_PROGRESS', // Set status awal
       }
     });
 

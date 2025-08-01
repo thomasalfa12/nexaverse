@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+import { getAuth } from "@/lib/auth";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import { contracts } from "@/lib/contracts";

@@ -1,22 +1,28 @@
+// src/app/api/uploadthing/core.ts
+
 import { createUploadthing, type FileRouter } from "uploadthing/next";
-import { getAuth } from "@/lib/server/auth"; // Gunakan helper auth Anda
+// FIX: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 
 const f = createUploadthing();
 
-// Fungsi untuk autentikasi user sebelum upload
+// Middleware otentikasi yang disederhanakan
 const handleAuth = async () => {
-  const { user } = await getAuth();
-  if (!user?.entityId) throw new Error("Unauthorized");
-  // Kembalikan ID user untuk digunakan jika perlu
-  return { userId: user.entityId };
+  // Cukup periksa apakah ada sesi yang valid
+  const session = await getAppSession();
+  
+  // Jika tidak ada user di sesi, tolak upload
+  if (!session?.user?.id) throw new Error("Unauthorized: Must be logged in to upload files.");
+  
+  // Kembalikan ID user untuk metadata
+  return { userId: session.user.id };
 };
 
 // Definisikan router file Anda
 export const ourFileRouter = {
-  // Definisikan "endpoint" upload, misal: courseImage
   courseImage: f({ image: { maxFileSize: "1MB", maxFileCount: 1 } })
-    // Jalankan middleware otentikasi sebelum upload
-    .middleware(() => handleAuth())
+    // Jalankan middleware otentikasi yang sederhana
+    .middleware(handleAuth)
     // `onUploadComplete` berjalan setelah upload selesai
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Upload complete for userId:", metadata.userId);

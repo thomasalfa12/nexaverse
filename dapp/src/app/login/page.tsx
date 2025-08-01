@@ -1,13 +1,13 @@
-// src/app/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useAccount, useSignMessage } from "wagmi";
+import { getCsrfToken, signIn, useSession } from "next-auth/react";
+import { SiweMessage } from "siwe";
 import { useRouter } from "next/navigation";
-import { useSiweLogin } from "@/lib/walletProviders/useSiweLogin";
-import { useSocialWallet } from "@/lib/walletProviders/useSocialWallet";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import * as THREE from "three";
-import { cn } from "@/lib/utils";
+
 // UI & Animasi
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -20,25 +20,21 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import DarkModeToggle from "@/components/ui/DarkModeToggle";
-
-import {
-  Chrome,
-  Loader2,
-  LogIn,
-  ShieldCheck,
-  PenTool,
-  Users,
-} from "lucide-react";
+import { LogIn, Loader2, ShieldCheck, PenTool, Users } from "lucide-react";
+import { toast } from "sonner";
 
 // ============================================================================
-// --- KOMPONEN VISUAL (TIDAK BERUBAH) ---
+// --- Komponen Visual (Direkreasi dari versi lama Anda) ---
 // ============================================================================
 
 const InteractiveHero = () => {
   const mountRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!mountRef.current) return;
     const currentMount = mountRef.current;
+
+    // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       75,
@@ -50,9 +46,13 @@ const InteractiveHero = () => {
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     currentMount.appendChild(renderer.domElement);
     camera.position.z = 10;
+
+    // Grid
     const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x444444);
     gridHelper.rotation.x = Math.PI / 2;
     scene.add(gridHelper);
+
+    // Particles
     const particleCount = 2000;
     const particlesGeometry = new THREE.BufferGeometry();
     const posArray = new Float32Array(particleCount * 3);
@@ -65,13 +65,15 @@ const InteractiveHero = () => {
     );
     const particleMaterial = new THREE.PointsMaterial({
       size: 0.05,
-      color: 0x3b82f6,
+      color: 0x3b82f6, // Warna biru primer
       blending: THREE.AdditiveBlending,
       transparent: true,
       opacity: 0.8,
     });
     const particleMesh = new THREE.Points(particlesGeometry, particleMaterial);
     scene.add(particleMesh);
+
+    // Mouse interaction
     const mouse = new THREE.Vector2();
     const handleMouseMove = (event: MouseEvent) => {
       const rect = currentMount.getBoundingClientRect();
@@ -79,6 +81,8 @@ const InteractiveHero = () => {
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
     currentMount.addEventListener("mousemove", handleMouseMove);
+
+    // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
       const positions = particleMesh.geometry.attributes.position
@@ -96,12 +100,16 @@ const InteractiveHero = () => {
       renderer.render(scene, camera);
     };
     animate();
+
+    // Handle resize
     const handleResize = () => {
       camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     };
     window.addEventListener("resize", handleResize);
+
+    // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
       currentMount.removeEventListener("mousemove", handleMouseMove);
@@ -110,6 +118,7 @@ const InteractiveHero = () => {
       }
     };
   }, []);
+
   return <div ref={mountRef} className="absolute inset-0 z-0 h-full w-full" />;
 };
 
@@ -120,13 +129,16 @@ const FeatureCarousel = () => {
     { text: "Libatkan Komunitas Anda", icon: Users },
   ];
   const [index, setIndex] = useState(0);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setIndex((prevIndex) => (prevIndex + 1) % features.length);
     }, 4000);
     return () => clearInterval(timer);
   }, [features.length]);
+
   const CurrentIcon = features[index].icon;
+
   return (
     <div className="relative z-10 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 mx-auto shadow-lg">
@@ -154,41 +166,68 @@ const FeatureCarousel = () => {
 };
 
 // ============================================================================
-// --- KOMPONEN UTAMA (DIRESTRUKTURISASI UNTUK RESPONSIVE) ---
+// --- Komponen Utama Halaman Login ---
 // ============================================================================
-export default function Home() {
+export default function LoginPage() {
   const router = useRouter();
-  const { login: signAndContinue, loading: siweLoading } = useSiweLogin();
-  const {
-    ready,
-    isLoggedIn,
-    login: socialLogin,
-    loading: socialLoading,
-  } = useSocialWallet();
+  const { status } = useSession();
+  const { address, chainId } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (ready && isLoggedIn) {
+    if (status === "authenticated") {
       router.replace("/dashboard");
     }
-  }, [ready, isLoggedIn, router]);
+  }, [status, router]);
+
+  const handleSiweLogin = async () => {
+    if (!address || !chainId) return;
+    setIsLoading(true);
+    try {
+      const nonce = await getCsrfToken();
+      if (!nonce) throw new Error("Gagal mendapatkan token keamanan (nonce).");
+
+      const message = new SiweMessage({
+        domain: window.location.host,
+        address,
+        statement: "Sign in with Ethereum to Nexaverse.",
+        uri: window.location.origin,
+        version: "1",
+        chainId,
+        nonce,
+      });
+
+      const signature = await signMessageAsync({
+        message: message.prepareMessage(),
+      });
+
+      await signIn("credentials", {
+        message: JSON.stringify(message),
+        signature,
+        redirect: true,
+        callbackUrl: "/dashboard",
+      });
+    } catch (error) {
+      toast.error("Login Gagal", {
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <main className="flex min-h-screen w-full flex-col lg:flex-row">
-      {/* KIRI – Hero Section (HANYA TAMPIL DI DESKTOP) */}
+      {/* KIRI – Hero Section */}
       <section className="relative hidden basis-1/2 flex-col items-center justify-center bg-black p-10 text-white lg:flex overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900" />
         <InteractiveHero />
         <FeatureCarousel />
       </section>
 
-      {/* KANAN – Auth Section (TAMPIL DI SEMUA UKURAN LAYAR) */}
-      <section
-        className={cn(
-          "relative flex flex-1 flex-col items-center justify-center p-6",
-          // PERBAIKAN: Latar belakang gelap di mobile, dan transparan di desktop agar mewarisi warna dari body
-          "bg-slate-900 text-white lg:bg-transparent lg:text-foreground"
-        )}
-      >
+      {/* KANAN – Auth Section */}
+      <section className="relative flex flex-1 flex-col items-center justify-center p-6 bg-slate-900 text-white lg:bg-transparent lg:text-foreground">
         <div className="absolute right-6 top-6">
           <DarkModeToggle />
         </div>
@@ -197,66 +236,53 @@ export default function Home() {
           <FeatureCarousel />
         </div>
 
-        <Card
-          className={cn(
-            "w-full max-w-sm",
-            "border-none bg-transparent shadow-none lg:border lg:bg-card lg:shadow-lg"
-          )}
-        >
-          <CardHeader className="text-center lg:text-left">
-            <CardTitle className="text-2xl text-white lg:text-foreground">
-              Selamat Datang
-            </CardTitle>
-            <CardDescription className="text-zinc-400 lg:text-muted-foreground">
-              Masuk ke Nexaverse untuk memulai.
+        <Card className="w-full max-w-sm bg-card/60 backdrop-blur-xl border-border/50 shadow-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Selamat Datang Kembali</CardTitle>
+            <CardDescription>
+              Masuk ke Nexaverse untuk melanjutkan.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
-            {ready && (
-              <Button
-                variant="outline"
-                onClick={() => socialLogin()}
-                disabled={socialLoading}
-              >
-                {socialLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Chrome className="mr-2 h-4 w-4" />
-                )}
-                Lanjutkan dengan Google
-              </Button>
-            )}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <Separator />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-slate-900 lg:bg-card px-2 text-muted-foreground">
-                  Atau lanjutkan dengan
+                <span className="bg-card/60 px-2 text-muted-foreground backdrop-blur-xl">
+                  Hubungkan dan Verifikasi
                 </span>
               </div>
             </div>
             <ConnectButton.Custom>
               {({ account, openConnectModal, mounted }) => {
-                if (!mounted) return null;
+                if (!mounted)
+                  return (
+                    <div className="h-[40px] w-full animate-pulse rounded-md bg-muted" />
+                  );
                 if (account) {
                   return (
                     <Button
-                      onClick={signAndContinue}
-                      disabled={siweLoading}
+                      onClick={handleSiweLogin}
+                      disabled={isLoading}
                       className="w-full"
+                      size="lg"
                     >
-                      {siweLoading ? (
+                      {isLoading ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
                         <LogIn className="mr-2 h-4 w-4" />
                       )}
-                      Masuk & Lanjutkan
+                      Sign-In & Lanjutkan
                     </Button>
                   );
                 }
                 return (
-                  <Button onClick={openConnectModal} className="w-full">
+                  <Button
+                    onClick={openConnectModal}
+                    className="w-full"
+                    size="lg"
+                  >
                     Hubungkan Wallet
                   </Button>
                 );

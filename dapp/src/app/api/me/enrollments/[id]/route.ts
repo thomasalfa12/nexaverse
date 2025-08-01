@@ -1,36 +1,30 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { getAuth } from "@/lib/server/auth";
+// 1. GANTI: Impor helper sesi yang benar
+import { getAppSession } from "@/lib/auth";
 
 export async function GET(
   request: Request,
   { params }: { params: { courseId: string } }
 ) {
   try {
-    // 1. Dapatkan sesi pengguna
-    const { user } = await getAuth();
-    if (!user?.address) {
+    // 2. GANTI: Gunakan getAppSession untuk mendapatkan data sesi
+    const session = await getAppSession();
+
+    // 3. GANTI: Pengecekan sesi yang lebih sederhana dan kuat
+    if (!session?.user?.id) {
       // Jika pengguna tidak login, mereka pasti belum terdaftar.
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Cari profil pengguna berdasarkan alamat wallet
-    const profile = await prisma.profile.findUnique({
-      where: { walletAddress: user.address },
-      select: { id: true }
-    });
+    // 4. HAPUS: Tidak perlu lagi mencari profil terpisah
 
-    if (!profile) {
-      // Ini seharusnya jarang terjadi jika pengguna sudah login, tapi ini adalah pengaman
-      return NextResponse.json({ error: "Profil tidak ditemukan" }, { status: 404 });
-    }
-
-    // 3. Cari pendaftaran di database
+    // 5. GANTI: Cari pendaftaran langsung menggunakan userId dari sesi
     const enrollment = await prisma.enrollment.findUnique({
       where: {
-        // Menggunakan indeks unik gabungan yang kita definisikan di schema.prisma
-        profileId_templateId: {
-          profileId: profile.id,
+        // Menggunakan indeks unik gabungan yang baru: userId_templateId
+        userId_templateId: {
+          userId: session.user.id,
           templateId: params.courseId,
         },
       },

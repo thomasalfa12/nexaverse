@@ -1,38 +1,28 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/server/prisma";
+// GANTI: Impor getAppSession dari lib/auth
+import { getAppSession } from "@/lib/auth";
 
 export const dynamic = 'force-dynamic';
 
-interface DecodedToken { address: string; roles: string[]; }
-
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const token = (await cookieStore).get("nexa_session")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
+    // GANTI: Gunakan getAppSession untuk mendapatkan data user
+    const session = await getAppSession();
+    
+    // Sesuaikan pengecekan dengan objek session baru
+    if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY")) {
+      return NextResponse.json({ error: "Akses ditolak" }, { status: 401 });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedToken;
-    if (!decoded.roles.includes("VERIFIED_ENTITY")) {
-      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
-    }
-
-    const creator = await prisma.verifiedEntity.findUnique({
-      where: { walletAddress: decoded.address },
-      select: { id: true },
-    });
-    if (!creator) {
-      return NextResponse.json({ error: "Entitas kreator tidak ditemukan" }, { status: 404 });
+    // Gunakan `entityId` langsung dari sesi untuk keamanan dan efisiensi
+    if (!session.user.entityId) {
+       return NextResponse.json({ error: "ID Entitas tidak ditemukan di sesi" }, { status: 404 });
     }
 
     const templates = await prisma.credentialTemplate.findMany({
       where: { 
-        creatorId: creator.id,
-        // PERUBAHAN KUNCI: Tambahkan filter ini untuk memastikan hanya
-        // aset bertipe 'COURSE' yang diambil untuk dasbor ini.
+        creatorId: session.user.entityId, // Gunakan ID dari sesi
         templateType: 'COURSE'
       },
       include: {
