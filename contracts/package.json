@@ -18,5 +18,8 @@
     "solidity-coverage": "^0.8.16",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts-upgradeable": "^5.4.0"
   }
 }

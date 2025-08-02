@@ -1,26 +1,29 @@
+// app/api/community/discovery/route.ts (Sudah Diperbaiki)
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { CourseStatus } from "@prisma/client"; // Impor enum
 
 export async function GET() {
   try {
-    const courses = await prisma.credentialTemplate.findMany({
+    // FIX: Mengganti query ke model 'Course'
+    const courses = await prisma.course.findMany({
       where: {
-        status: 'PUBLISHED',
-        
-        // Filter yang sudah ada untuk memastikan ini adalah kursus multi-modul
+        status: CourseStatus.PUBLISHED, // Menggunakan enum
+        // Filter untuk memastikan kursus ini memiliki setidaknya satu modul
         modules: {
           some: {},
         },
       },
       include: {
-        modules: { select: { id: true } },
+        modules: { select: { id: true } }, // Hanya ambil ID untuk efisiensi
         _count: { 
           select: { 
             enrollments: true,
-            // Anda mungkin ingin menyertakan statistik lain di sini jika perlu
           } 
         },
         creator: { select: { name: true } },
+        pricing: true, // Sertakan juga data harga
       },
       orderBy: { createdAt: 'desc' },
     });

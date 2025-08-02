@@ -1,41 +1,41 @@
-import type { 
-  CredentialTemplate, 
-  CourseModule as PrismaModule, 
-  VerifiedEntity as PrismaVerifiedEntity, 
-  Pricing as PrismaPricing, 
+// src/types.ts (Sudah Diperbaiki)
+
+import type {
+  Course as PrismaCourse,
+  Credential as PrismaCredential,
+  CourseModule as PrismaModule,
+  VerifiedEntity as PrismaVerifiedEntity,
+  Pricing as PrismaPricing,
   Enrollment as PrismaEnrollment,
   EligibilityRecord as PrismaEligibilityRecord,
-  CourseStatus
 } from "@prisma/client";
 
-// FIX: Menggunakan 'type' alias untuk menghindari error linter pada interface kosong.
+// --- Tipe Data Dasar ---
 export type CourseModule = PrismaModule;
 export type Pricing = PrismaPricing;
 export type VerifiedEntity = PrismaVerifiedEntity;
-export type EligibilityRecord = PrismaEligibilityRecord;
 
 // --- Tipe Data Gabungan (Composite Types) ---
 
-export interface TemplateWithStats extends CredentialTemplate {
+// FIX: Tipe baru untuk Course dengan relasi yang dibutuhkan oleh komponen.
+// Ini menggantikan `TemplateWithStats` yang lama.
+export type CourseWithStats = PrismaCourse & {
   _count: {
-    eligibilityList: number;
-    issuedCredentials: number;
     enrollments: number;
   };
-  modules: CourseModule[];
-  creator: Pick<VerifiedEntity, 'name' | 'bio'>;
+  creator: Pick<VerifiedEntity, "name" | "bio">;
   pricing: Pricing | null;
-  // FIX: Menambahkan properti status yang hilang
-  status: CourseStatus;
-}
+  modules: Pick<PrismaModule, 'id'>[];
+};
 
+// FIX: Tipe Enrollment yang sekarang berelasi dengan Course, bukan CredentialTemplate.
 export interface EnrollmentWithCourse extends PrismaEnrollment {
-  course: CredentialTemplate;
+  course: PrismaCourse;
 }
 
+// FIX: Tipe untuk kredensial yang bisa diklaim, sekarang berelasi dengan Credential.
 export interface ClaimableRecord extends PrismaEligibilityRecord {
-  template: CredentialTemplate & {
-    creator: Pick<VerifiedEntity, 'name'>;
+  credential: PrismaCredential & {
+    creator: Pick<VerifiedEntity, "name">;
   };
 }
-

@@ -7,29 +7,29 @@ import { wagmiConfig } from "@/lib/walletProviders/wallet";
 import Providers from "./providers";
 import "./globals.css";
 
-// HAPUS: Import AuthProvider yang sudah tidak terpakai
-// import { AuthProvider } from "@/components/auth/AuthProviders";
+// 1. Impor Toaster dari sonner
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "Nexaverse App",
   description: "Aplikasi Web3 yang dibangun dengan benar",
 };
 
-// FIX: Tambahkan 'async' ke fungsi RootLayout
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // FIX: Tambahkan 'await' sebelum memanggil headers()
   const cookie = (await headers()).get("cookie");
   const initialState = cookieToInitialState(wagmiConfig, cookie);
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        {/* Kode ini sudah benar */}
         <Providers initialState={initialState}>{children}</Providers>
+        {/* 2. Tambahkan komponen Toaster di sini, di luar Providers */}
+        {/* Ini memastikan Toaster ada di level paling atas aplikasi Anda */}
+        <Toaster richColors position="top-center" />
       </body>
     </html>
   );

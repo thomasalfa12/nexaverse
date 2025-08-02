@@ -17,9 +17,8 @@ export async function GET(
     // 3. GANTI: Query yang disesuaikan dengan skema baru dan lebih aman
     const enrollments = await prisma.enrollment.findMany({
       where: {
-        templateId: params.courseId,
-        // Keamanan: Pastikan kreator hanya bisa melihat pendaftaran kursusnya sendiri
-        course: {
+        courseId: params.courseId, // FIX: Gunakan 'courseId'
+        course: { // Pengecekan keamanan sudah benar
           creatorId: session.user.entityId,
         },
       },

@@ -23,9 +23,9 @@ export async function GET(
     const enrollment = await prisma.enrollment.findUnique({
       where: {
         // Menggunakan indeks unik gabungan yang baru: userId_templateId
-        userId_templateId: {
+        userId_courseId: {
           userId: session.user.id,
-          templateId: params.courseId,
+          courseId: params.courseId,
         },
       },
     });

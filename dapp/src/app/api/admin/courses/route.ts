@@ -5,7 +5,7 @@ import { getServerWalletClient } from "@/lib/server/wallet";
 import { contracts } from "@/lib/contracts";
 import { parseEther, parseEventLogs, type Log } from "viem";
 import { z } from "zod";
-
+import { CourseStatus, PricingType } from "@prisma/client";
 // Skema validasi untuk data yang masuk
 const createCourseSchema = z.object({
   title: z.string().min(5, "Judul kursus minimal 5 karakter."),
@@ -67,19 +67,19 @@ export async function POST(req: Request) {
 
     // 4. Simpan ke Database
     // OPTIMASI: Tidak perlu query `VerifiedEntity` lagi, `entityId` sudah ada di sesi.
-    const newCourse = await prisma.credentialTemplate.create({
+    const newCourse = await prisma.course.create({
       data: {
         title,
         description,
         imageUrl,
-        category, // Simpan kategori
+        category,
         contractAddress: newContractAddress.toLowerCase(),
-        creatorId: session.user.entityId, // Gunakan entityId dari sesi
-        status: 'DRAFT',
-        templateType: 'COURSE',
+        creatorId: session.user.entityId,
+        status: CourseStatus.DRAFT, // Menggunakan enum
+        // FIX: Hapus `templateType` karena sudah tidak relevan
         pricing: {
           create: {
-            type: price > 0 ? 'ONE_TIME' : 'FREE',
+            type: price > 0 ? PricingType.ONE_TIME : PricingType.FREE, // Menggunakan enum
             price: price,
             currency: 'ETH',
           }

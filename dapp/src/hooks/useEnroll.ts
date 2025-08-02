@@ -1,39 +1,58 @@
+// hooks/useEnroll.ts (Dioptimalkan untuk ETH & ERC20)
+
 "use client";
 
-import { useWriteContract } from "wagmi";
+import { useWriteContract, useAccount } from "wagmi";
 import { parseEther } from "viem";
 import { toast } from "sonner";
-import { contracts } from "@/lib/contracts"; // Asumsi ada file contracts.ts yang berisi ABI kontrak
+import { contracts } from "@/lib/contracts";
 
-export function useEnroll(
-  contractAddress: `0x${string}`,
-  priceInEth: string
-) {
+// Tipe untuk argumen, sekarang menyertakan paymentToken opsional
+type EnrollArgs = {
+  contractAddress: `0x${string}`;
+  price: string;
+  paymentToken?: `0x${string}`;
+};
+
+export function useEnroll() {
+  const { address: userAddress } = useAccount();
   const { 
     data: hash, 
-    isPending, // true saat dompet pop-up terbuka
+    isPending,
     writeContractAsync 
   } = useWriteContract();
 
-  const enroll = async () => {
-    try {
-      // Konversi harga dari string ETH (misal "0.05") menjadi wei (bigint)
-      const priceInWei = parseEther(priceInEth);
+  const enroll = async ({ contractAddress, price, paymentToken }: EnrollArgs) => {
+    if (!userAddress) {
+      toast.error("Dompet tidak terhubung.");
+      return;
+    }
 
-      // KUNCI: Saat memanggil writeContractAsync untuk fungsi `payable`,
-      // kita harus menyertakan properti `value` yang berisi jumlah wei
-      // yang akan dikirim bersama transaksi.
-      await writeContractAsync({
-        address: contractAddress,
-        abi: contracts.courseManager.abi, // Asumsi ABI ada di contracts.ts
-        functionName: 'enrollWithETH',
-        // Tidak ada `args` karena fungsi `enrollWithETH` di kontrak tidak memiliki argumen
-        args: [], 
-        value: priceInWei, // Ini adalah bagian yang paling penting
-      });
+    try {
+      const isEthPayment = !paymentToken || paymentToken === "0x0000000000000000000000000000000000000000";
+      const priceInWei = parseEther(price);
+
+      if (isEthPayment) {
+        // Logika untuk pembayaran dengan ETH
+        await writeContractAsync({
+          address: contractAddress,
+          abi: contracts.nexaCourse.abi, // Menggunakan ABI logika yang benar
+          functionName: 'enrollWithETH',
+          value: priceInWei, // Mengirim ETH bersama transaksi
+        });
+      } else {
+        toast.info("Meminta persetujuan untuk menggunakan token Anda...");
+
+        await writeContractAsync({
+          address: contractAddress,
+          abi: contracts.nexaCourse.abi,
+          functionName: 'enrollWithToken',
+          // Fungsi ini tidak payable, jadi tidak ada `value`
+        });
+        toast.success("Pendaftaran dengan token berhasil!");
+      }
 
     } catch (error) {
-      // Tangani error jika pengguna menolak transaksi di dompet
       const errorMessage = (error as Error).message.includes("User rejected the request")
         ? "Transaksi dibatalkan oleh pengguna."
         : (error as Error).message;
@@ -49,7 +68,5 @@ export function useEnroll(
     enroll,
     hash,
     isPending,
-    // Kita bisa mendapatkan status konfirmasi dari `PricingBox`
-    // menggunakan `useWaitForTransactionReceipt({ hash })`
   };
 }

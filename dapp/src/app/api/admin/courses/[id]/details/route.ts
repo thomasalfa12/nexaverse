@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-// 1. GANTI: Impor helper sesi yang benar
 import { getAppSession } from "@/lib/auth";
 import { z } from "zod";
 
@@ -15,11 +14,11 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    // 2. GANTI: Gunakan getAppSession untuk mendapatkan data sesi
-    const session = await getAppSession();
+  // FIX: Ekstrak ID di awal untuk menghindari error dynamic route
+  const courseId = params.id;
 
-    // 3. GANTI: Pengecekan otentikasi & otorisasi yang benar
+  try {
+    const session = await getAppSession();
     if (!session?.user?.entityId || !session.user.roles.includes("VERIFIED_ENTITY")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -31,10 +30,9 @@ export async function PUT(
       return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
     }
 
-    // 4. GANTI: Gunakan `updateMany` untuk keamanan dan `session.user.entityId`
-    const updateResult = await prisma.credentialTemplate.updateMany({
+    const updateResult = await prisma.course.updateMany({
       where: { 
-        id: params.id, 
+        id: courseId, 
         creatorId: session.user.entityId // Pastikan hanya kreator yang bisa mengedit
       },
       data: validation.data,
@@ -46,7 +44,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.log("server error", error)
+    console.log("Server error on details update:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

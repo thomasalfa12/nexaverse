@@ -25,7 +25,7 @@ const moduleSchema = z.object({
 // Handler untuk MENDAPATKAN semua modul untuk sebuah kursus
 export async function GET(
   req: Request,
-  { params }: { params: { courseId: string } }
+  { params }: { params: { id: string } } // FIX: Gunakan 'id' sesuai nama folder
 ) {
   try {
     const session = await getAppSession();
@@ -33,12 +33,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Query yang aman, memastikan user hanya bisa melihat modul dari kursus miliknya
     const modules = await prisma.courseModule.findMany({
       where: { 
-        templateId: params.courseId,
-        template: { 
-            creatorId: session.user.entityId 
+        courseId: params.id, // FIX: Gunakan 'id'
+        course: { 
+          creatorId: session.user.entityId 
         }
       },
       orderBy: { stepNumber: 'asc' },
@@ -46,7 +45,7 @@ export async function GET(
 
     return NextResponse.json(modules);
   } catch (error) {
-    console.error(`[API GET Modules Error] for course ${params.courseId}:`, error);
+    console.error(`[API GET Modules Error] for course ${params.id}:`, error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -54,7 +53,7 @@ export async function GET(
 // Handler untuk MEMBUAT modul baru
 export async function POST(
   req: Request,
-  { params }: { params: { courseId: string } }
+  { params }: { params: { id: string } } // FIX: Gunakan 'id' sesuai nama folder
 ) {
     try {
         const session = await getAppSession();
@@ -62,20 +61,18 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // 1. Verifikasi kepemilikan kursus SEBELUM membuat modul
-        const course = await prisma.credentialTemplate.findFirst({
+        const course = await prisma.course.findFirst({
             where: { 
-                id: params.courseId,
+                id: params.id, // FIX: Gunakan 'id'
                 creatorId: session.user.entityId
             },
-            select: { _count: { select: { modules: true } } } // Ambil jumlah modul saat ini
+            select: { _count: { select: { modules: true } } }
         });
 
         if (!course) {
-            return NextResponse.json({ error: "Course not found or you do not have permission to add modules to it." }, { status: 404 });
+            return NextResponse.json({ error: "Kursus tidak ditemukan atau Anda tidak punya izin." }, { status: 404 });
         }
 
-        // 2. Lanjutkan dengan validasi dan pembuatan jika kepemilikan sah
         const body = await req.json();
         const validation = moduleSchema.safeParse(body);
         if (!validation.success) {
@@ -94,14 +91,14 @@ export async function POST(
                 quizData: type === 'QUIZ' && quizData 
                     ? (quizData as Prisma.InputJsonValue) 
                     : Prisma.JsonNull,
-                templateId: params.courseId,
-                stepNumber: moduleCount + 1, // Tentukan urutan modul secara otomatis
+                courseId: params.id, // FIX: Gunakan 'id'
+                stepNumber: moduleCount + 1,
             }
         });
 
         return NextResponse.json(newModule, { status: 201 });
     } catch (error) {
-        console.error(`[API POST Module Error] for course ${params.courseId}:`, error);
+        console.error(`[API POST Module Error] for course ${params.id}:`, error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

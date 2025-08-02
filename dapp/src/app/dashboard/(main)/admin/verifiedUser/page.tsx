@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
-import type { TemplateWithStats } from "@/types";
-import { TemplateListView } from "@/components/admin/verifiedUser/template/TemplateListView";
-import { TemplateDetailView } from "@/components/admin/verifiedUser/template/TemplateDetailView";
+import type { CourseWithStats } from "@/types";
+import { TemplateListView } from "@/components/admin/verifiedUser/template/CourseListView";
+import { TemplateDetailView } from "@/components/admin/verifiedUser/template/CourseDetailView";
 import { CreateCourseDialog } from "@/components/admin/verifiedUser/courses/CreateCourseDialog";
 import { CreateChoiceDialog } from "@/components/admin/verifiedUser/template/TemplateChoiceDialog";
 import { CreateCredentialDialog } from "@/components/admin/verifiedUser/credential/CreateCredentialDialog";
@@ -13,9 +13,9 @@ import { Button } from "@/components/ui/button";
 
 export default function VerifiedUserDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [allTemplates, setAllTemplates] = useState<TemplateWithStats[]>([]);
+  const [allTemplates, setAllTemplates] = useState<CourseWithStats[]>([]);
   const [selectedTemplate, setSelectedTemplate] =
-    useState<TemplateWithStats | null>(null);
+    useState<CourseWithStats | null>(null);
   const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [isSimpleModalOpen, setIsSimpleModalOpen] = useState(false);
@@ -53,7 +53,7 @@ export default function VerifiedUserDashboardPage() {
   if (selectedTemplate) {
     return (
       <TemplateDetailView
-        template={selectedTemplate}
+        course={selectedTemplate}
         onBack={() => setSelectedTemplate(null)}
       />
     );
@@ -96,8 +96,8 @@ export default function VerifiedUserDashboardPage() {
       ) : (
         // FIX: Tidak ada lagi Tabs. Langsung tampilkan semua sebagai kursus.
         <TemplateListView
-          templates={allTemplates}
-          onSelectTemplate={setSelectedTemplate}
+          courses={allTemplates}
+          onSelectCourse={setSelectedTemplate}
           emptyStateMessage="Anda belum membuat kursus apapun. Klik 'Buat Baru' untuk memulai."
           onCreateClick={() => handleSelectCreationType("course")}
         />

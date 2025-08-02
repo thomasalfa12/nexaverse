@@ -9,12 +9,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { TemplateWithStats } from "@/types";
+import type { CourseWithStats } from "@/types";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { CourseStatus } from "@prisma/client";
 
-export function CourseSettings({ course }: { course: TemplateWithStats }) {
+export function CourseSettings({ course }: { course: CourseWithStats }) {
   // FIX: Menggunakan tipe CourseStatus yang diimpor
   const [currentStatus, setCurrentStatus] = useState<CourseStatus>(
     course.status

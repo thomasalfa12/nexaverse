@@ -1,3 +1,5 @@
+// src/components/admin/verifiedUser/courses/details/StudentManager.tsx (Sudah Diperbaiki)
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,30 +20,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Enrollment, Profile } from "@prisma/client";
+// FIX: Ganti 'Profile' dengan 'User' karena Profile sudah digabung ke User
+import type { Enrollment, User } from "@prisma/client";
 
+// FIX: Relasi 'student' sekarang menunjuk ke tipe 'User'
 interface EnrolledStudent extends Enrollment {
-  student: Pick<Profile, "name" | "walletAddress">;
+  student: Pick<User, "name" | "walletAddress">;
 }
 
-export function StudentManager({
-  courseId,
-  isSimpleCredential = false,
-}: {
-  courseId: string;
-  isSimpleCredential?: boolean;
-}) {
+export function StudentManager({ courseId }: { courseId: string }) {
   const [enrollments, setEnrollments] = useState<EnrolledStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // FIX: Menggunakan `courseId` untuk mengambil data siswa
     const fetchStudents = async () => {
       setIsLoading(true);
       try {
         const res = await fetch(`/api/admin/courses/${courseId}/enrollments`);
         if (res.ok) {
           setEnrollments(await res.json());
+        } else {
+          console.error("Gagal mengambil data siswa terdaftar.");
         }
       } catch (error) {
         console.error("Failed to fetch students:", error);
@@ -50,12 +49,8 @@ export function StudentManager({
       }
     };
 
-    if (!isSimpleCredential) {
-      fetchStudents();
-    } else {
-      setIsLoading(false);
-    }
-  }, [courseId, isSimpleCredential]);
+    fetchStudents();
+  }, [courseId]);
 
   return (
     <Card>
@@ -110,9 +105,7 @@ export function StudentManager({
                       "id-ID"
                     )}
                   </TableCell>
-                  <TableCell>
-                    {enrollment.progress ? `${enrollment.progress}%` : "0%"}
-                  </TableCell>
+                  <TableCell>{`${enrollment.progress || 0}%`}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

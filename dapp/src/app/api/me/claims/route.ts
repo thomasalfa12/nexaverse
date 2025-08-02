@@ -1,16 +1,15 @@
-// app/api/me/claims/route.ts
+// app/api/me/claims/route.ts (Perbaikan Final)
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-// GANTI: Impor helper sesi yang benar
 import { getAppSession } from "@/lib/auth";
+// FIX: Hapus impor 'EligibilityStatus' karena tidak ada.
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // GANTI: Gunakan getAppSession untuk mendapatkan data sesi
     const session = await getAppSession();
-
-    // Sesuaikan pengecekan dengan objek sesi yang baru
     if (!session?.user?.address) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -20,13 +19,11 @@ export async function GET() {
     const claimableRecords = await prisma.eligibilityRecord.findMany({
       where: {
         userWalletAddress: userWallet,
-        status: "ELIGIBLE",
-        template: {
-          templateType: 'CREDENTIAL'
-        }
+        // FIX: Gunakan string literal "ELIGIBLE" secara langsung.
+        status: "ELIGIBLE", 
       },
       include: {
-        template: {
+        credential: {
           include: {
             creator: {
               select: { name: true },

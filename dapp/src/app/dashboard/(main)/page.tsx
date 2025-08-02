@@ -3,17 +3,20 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { toast } from "sonner";
-import { Loader2, Search, XCircle } from "lucide-react";
-import type { TemplateWithStats } from "@/types";
-import { CourseCard } from "@/components/discovery/CourseCard";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Loader2, Search, XCircle } from "lucide-react";
 
-// Komponen untuk menampilkan tombol kategori
+// FIX 1: Mengimpor tipe data 'CourseWithStats' yang benar dari file types Anda.
+import type { CourseWithStats } from "@/types";
+
+import { CourseCard } from "@/components/discovery/CourseCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+// Komponen untuk menampilkan tombol filter kategori
 const CategoryFilters = ({
   categories,
   selected,
@@ -43,13 +46,14 @@ const CategoryFilters = ({
   </div>
 );
 
-// Komponen utama halaman
+// Komponen utama halaman dasbor/penemuan
 export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [courses, setCourses] = useState<TemplateWithStats[]>([]);
+  // FIX 2: State 'courses' sekarang menggunakan tipe data CourseWithStats[] yang benar.
+  const [courses, setCourses] = useState<CourseWithStats[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
-  // State untuk filter
+  // State untuk fungsionalitas filter dan pencarian
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
 
@@ -57,7 +61,7 @@ export default function DiscoveryPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Ambil data kursus dan kategori secara bersamaan
+        // Mengambil data kursus dan kategori secara bersamaan untuk efisiensi
         const [coursesRes, categoriesRes] = await Promise.all([
           fetch("/api/community/discovery"),
           fetch("/api/community/categories"),
@@ -76,7 +80,7 @@ export default function DiscoveryPage() {
     fetchData();
   }, []);
 
-  // Logika filter yang menggabungkan kategori dan pencarian
+  // Logika untuk memfilter kursus berdasarkan kategori dan pencarian
   const filteredCourses = useMemo(() => {
     return courses
       .filter((course) => {
@@ -85,7 +89,7 @@ export default function DiscoveryPage() {
         return course.category === selectedCategory;
       })
       .filter((course) => {
-        // Filter berdasarkan pencarian teks
+        // Filter berdasarkan pencarian teks (judul atau kreator)
         if (!searchTerm) return true;
         const searchLower = searchTerm.toLowerCase();
         return (
@@ -95,6 +99,7 @@ export default function DiscoveryPage() {
       });
   }, [courses, selectedCategory, searchTerm]);
 
+  // Fungsi untuk me-render konten utama (loading, hasil, atau pesan kosong)
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -122,7 +127,8 @@ export default function DiscoveryPage() {
               className="h-full"
             >
               <Link href={`/courses/${course.id}`} className="h-full block">
-                <CourseCard template={course} />
+                {/* FIX 3: Mengirim prop 'course' ke komponen CourseCard, bukan 'template'. */}
+                <CourseCard course={course} />
               </Link>
             </motion.div>
           ))}
@@ -145,7 +151,7 @@ export default function DiscoveryPage() {
 
   return (
     <div className="container mx-auto py-12 px-4">
-      {/* Hero Section */}
+      {/* Bagian Hero */}
       <div className="text-center mb-10">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight lg:text-6xl">
           Jelajahi Ekosistem Kursus
@@ -156,7 +162,7 @@ export default function DiscoveryPage() {
         </p>
       </div>
 
-      {/* Search Bar */}
+      {/* Bilah Pencarian */}
       <div className="mb-8 max-w-2xl mx-auto">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -179,7 +185,7 @@ export default function DiscoveryPage() {
         />
       )}
 
-      {/* Konten Kursus */}
+      {/* Konten Kursus yang Dirender */}
       <div className="mt-8">{renderContent()}</div>
     </div>
   );

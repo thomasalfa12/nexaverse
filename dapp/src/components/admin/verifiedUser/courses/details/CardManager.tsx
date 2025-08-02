@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, UploadCloud } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,18 +18,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { TemplateWithStats } from "@/types";
+import type { CourseWithStats } from "@/types";
 import { courseCategories } from "@/types/categoryCourse";
-// BARU: Impor UploadButton dari file yang baru kita buat
-import { UploadButton } from "@/lib/uploadthing";
+import { uploadCourseImageAction } from "@/lib/server/actions/imageActions";
 
-const toGatewayURL = (ipfsUri: string) => {
-  if (ipfsUri && ipfsUri.startsWith("ipfs://"))
+// FIX 1: Buat fungsi ini lebih kuat untuk menangani nilai null/undefined
+const toGatewayURL = (ipfsUri: string | null | undefined): string => {
+  if (ipfsUri && ipfsUri.startsWith("ipfs://")) {
     return ipfsUri.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return ipfsUri;
+  }
+  // Sediakan URL placeholder default jika tidak ada gambar sama sekali
+  return ipfsUri || "/images/placeholder.png";
 };
 
-// Skema Zod sekarang juga bisa menerima imageUrl
 const detailsSchema = z.object({
   title: z.string().min(5, "Judul minimal 5 karakter."),
   description: z.string().min(10, "Deskripsi minimal 10 karakter."),
@@ -39,18 +40,19 @@ const detailsSchema = z.object({
 
 type DetailsFormData = z.infer<typeof detailsSchema>;
 
-export function CourseCardManager({ course }: { course: TemplateWithStats }) {
-  // State HANYA untuk URL gambar baru (visual), bukan file-nya
+export function CourseCardManager({ course }: { course: CourseWithStats }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // State ini sekarang akan menyimpan URL IPFS mentah, bukan URL gateway
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
-    setValue, // Kita butuh setValue untuk update form state secara programatik
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<DetailsFormData>({
     resolver: zodResolver(detailsSchema),
-    // `defaultValues` sekarang juga menyertakan imageUrl
     defaultValues: {
       title: course.title,
       description: course.description,
@@ -59,21 +61,54 @@ export function CourseCardManager({ course }: { course: TemplateWithStats }) {
     },
   });
 
-  // Logika pengiriman sekarang SANGAT sederhana, hanya mengirim JSON
+  const handleImageUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      // 5MB limit
+      toast.error("Ukuran file terlalu besar (maksimal 5MB).");
+      return;
+    }
+
+    setIsUploading(true);
+    const toastId = toast.loading("Mengunggah gambar ke IPFS...");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const result = await uploadCourseImageAction(formData);
+
+      if (!result.success || !result.url) {
+        throw new Error(result.error || "Gagal mengunggah file.");
+      }
+
+      toast.success("Gambar berhasil diunggah! Jangan lupa simpan perubahan.", {
+        id: toastId,
+      });
+      // Simpan URL IPFS mentah ke state
+      setNewImageUrl(result.url);
+      setValue("imageUrl", result.url, { shouldDirty: true });
+    } catch (error) {
+      toast.error("Upload Gagal", {
+        id: toastId,
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const onSubmit = async (data: DetailsFormData) => {
     try {
       const res = await fetch(`/api/admin/courses/${course.id}/details`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data), // Kirim sebagai JSON, bukan FormData
+        body: JSON.stringify(data),
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Gagal menyimpan perubahan.");
       }
       toast.success("Detail kursus berhasil diperbarui.");
-      setNewImageUrl(null); // Reset pratinjau
     } catch (error) {
       toast.error("Gagal menyimpan", { description: (error as Error).message });
     }
@@ -91,7 +126,6 @@ export function CourseCardManager({ course }: { course: TemplateWithStats }) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Bagian Judul, Deskripsi, dan Kategori tidak banyak berubah */}
           <div>
             <Label htmlFor="title">Judul Kursus</Label>
             <Input id="title" {...register("title")} />
@@ -115,7 +149,7 @@ export function CourseCardManager({ course }: { course: TemplateWithStats }) {
             <select
               id="category"
               {...register("category")}
-              className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background ..."
+              className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">Pilih Kategori</option>
               {courseCategories.map((cat) => (
@@ -131,48 +165,49 @@ export function CourseCardManager({ course }: { course: TemplateWithStats }) {
             )}
           </div>
 
-          {/* Editor Gambar Sampul sekarang menggunakan UploadThing */}
           <div className="space-y-3">
             <Label>Gambar Sampul</Label>
             <div className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center gap-4">
-              {/* FIX 1: Bungkus <Image> dengan div yang memiliki 'relative' */}
-              <div className="relative w-full max-w-lg aspect-video rounded-md overflow-hidden">
+              <div className="relative w-full max-w-lg aspect-video rounded-md overflow-hidden bg-muted">
+                {/* FIX 2: Bungkus SEMUA kemungkinan URL dengan toGatewayURL */}
                 <Image
-                  src={newImageUrl || toGatewayURL(course.imageUrl)}
+                  src={toGatewayURL(newImageUrl || course.imageUrl)}
                   alt="Pratinjau Sampul"
                   fill
                   className="object-cover"
                 />
               </div>
-              {/* FIX 2: Sesuaikan tampilan UploadButton agar menyatu */}
-              <UploadButton
-                endpoint="courseImage"
-                onClientUploadComplete={(res?: { url: string }[]) => {
-                  if (res?.[0].url) {
-                    toast.info(
-                      "Gambar berhasil diunggah. Jangan lupa simpan perubahan."
-                    );
-                    setNewImageUrl(res[0].url);
-                    setValue("imageUrl", res[0].url, { shouldDirty: true });
-                  }
+              <Input
+                id="image-upload"
+                ref={fileInputRef}
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) handleImageUpload(e.target.files[0]);
                 }}
-                onUploadError={(error: Error) => {
-                  toast.error("Upload Gagal", { description: error.message });
-                }}
-                // Prop 'appearance' untuk styling
-                appearance={{
-                  button:
-                    "ut-ready:bg-primary ut-uploading:bg-primary/50 w-full text-base py-6",
-                  container: "w-full flex justify-center",
-                  allowedContent: "text-muted-foreground",
-                }}
+                disabled={isUploading}
               />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full max-w-lg"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="mr-2 h-4 w-4" />
+                )}
+                {isUploading ? "Mengunggah..." : "Ganti Gambar Sampul"}
+              </Button>
             </div>
           </div>
 
           <Button
             type="submit"
-            disabled={isSubmitting || !isDirty}
+            disabled={isUploading || isSubmitting || !isDirty}
             className="w-full"
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

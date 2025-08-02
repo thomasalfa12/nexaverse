@@ -1,5 +1,8 @@
+// src/components/admin/verifiedUser/courses/details/CredentialManager.tsx (Sudah Diperbaiki)
+
 "use client";
-import type { TemplateWithStats } from "@/types";
+// FIX: Ganti tipe TemplateWithStats menjadi CourseWithStats
+import type { CourseWithStats } from "@/types";
 import {
   Card,
   CardContent,
@@ -9,13 +12,17 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export function CredentialManager({ course }: { course: TemplateWithStats }) {
-  const hasCredentialContract = !!course.finalCredentialContract;
+// FIX: Ganti tipe prop 'course'
+export function CredentialManager({ course }: { course: CourseWithStats }) {
+  // FIX: Logika diubah karena `finalCredentialContract` tidak ada lagi.
+  // Untuk saat ini, kita anggap kredensial belum ada dan perlu dibuat.
+  // Anda bisa mengembangkan logika ini nanti untuk mengecek relasi ke model Credential.
+  const hasCredentialContract = false; // Placeholder
 
   const handleDeployCredential = () => {
-    // Di sini akan memanggil server action `templateAction`
-    // untuk men-deploy UserSBT dan menautkannya ke kursus ini.
-    alert("Logika untuk men-deploy kontrak kredensial akan ada di sini.");
+    alert(
+      `Logika untuk deploy kredensial bagi kursus "${course.title}" akan ada di sini.`
+    );
   };
 
   return (
@@ -33,24 +40,15 @@ export function CredentialManager({ course }: { course: TemplateWithStats }) {
             <p className="text-sm font-medium">
               Kontrak Kredensial sudah disiapkan.
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-1">
-              {course.finalCredentialContract}
-            </p>
-            <div className="mt-4">
-              {/* Di sini akan ada UI untuk mengelola daftar eligible
-                  untuk kredensial kelulusan, terpisah dari pendaftaran kursus. */}
-              <p>
-                UI untuk mengelola daftar siswa yang lulus akan ada di sini.
-              </p>
-            </div>
+            {/* Logika untuk menampilkan alamat kontrak jika sudah ada */}
           </div>
         ) : (
           <div className="text-center py-8 border-2 border-dashed rounded-lg">
             <p className="text-muted-foreground">
-              Belum ada kontrak kredensial untuk kursus ini.
+              Belum ada kredensial kelulusan untuk kursus ini.
             </p>
             <Button className="mt-4" onClick={handleDeployCredential}>
-              Siapkan & Deploy Kontrak Kredensial
+              Siapkan & Deploy Kredensial
             </Button>
           </div>
         )}

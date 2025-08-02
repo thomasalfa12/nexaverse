@@ -24,7 +24,7 @@ export async function DELETE(
     const deleteResult = await prisma.courseModule.deleteMany({
       where: {
         id: params.moduleId,
-        template: {
+        course: {
           creatorId: session.user.entityId,
         },
       },

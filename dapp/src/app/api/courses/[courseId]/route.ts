@@ -1,5 +1,8 @@
+// src/app/api/course/[courseId]/modules/route.ts (Sudah Diperbaiki)
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { CourseStatus } from "@prisma/client"; // Impor enum
 
 export async function GET(
   request: Request,
@@ -12,16 +15,14 @@ export async function GET(
       return NextResponse.json({ error: "ID Kursus tidak valid" }, { status: 400 });
     }
 
-    // Mengambil data kursus dari database
-    const course = await prisma.credentialTemplate.findFirst({
+    // FIX: Mengganti query ke model `Course`
+    const course = await prisma.course.findFirst({
       where: { 
         id: courseId, 
-        // Ini adalah filter keamanan yang krusial:
-        // Hanya kursus yang sudah diterbitkan yang bisa diakses publik.
-        status: 'PUBLISHED' 
+        status: CourseStatus.PUBLISHED // Menggunakan enum
       },
       include: {
-        // Menyertakan semua data yang dibutuhkan oleh halaman detail
+        // Semua relasi di bawah ini sudah benar sesuai skema baru
         modules: { 
           orderBy: { stepNumber: 'asc' },
           select: {
@@ -30,7 +31,6 @@ export async function GET(
             type: true,
             durationMinutes: true,
             stepNumber: true,
-            // contentText tidak disertakan di sini untuk menjaga data tetap ringkas
           }
         },
         creator: { 
@@ -43,13 +43,10 @@ export async function GET(
       },
     });
 
-    // Jika tidak ada kursus yang ditemukan (atau statusnya bukan PUBLISHED),
-    // kembalikan error 404.
     if (!course) {
       return NextResponse.json({ error: "Kursus tidak ditemukan atau belum dipublikasikan" }, { status: 404 });
     }
 
-    // Jika berhasil, kembalikan data kursus
     return NextResponse.json(course);
   } catch (error) {
     console.error(`[API ERROR] Gagal mengambil kursus ${params.courseId}:`, error);

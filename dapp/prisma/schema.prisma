@@ -1,3 +1,5 @@
+// File: schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,12 +9,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum TemplateType {
-  COURSE
-  CREDENTIAL
-}
+// --- DEFINISI ENUM ---
 
-// --- ENUM UNTUK STATUS ---
 enum VerificationStatus {
   PENDING
   REGISTERED
@@ -33,10 +31,10 @@ enum CredentialLifecycleStatus {
 }
 
 enum ModuleType {
-  CONTENT // Untuk link video, PDF, atau teks Markdown
-  LIVE_SESSION // Untuk link Zoom/Google Meet
-  SUBMISSION // Untuk portal pengumpulan tugas
-  QUIZ // Untuk masa depan
+  CONTENT
+  LIVE_SESSION
+  SUBMISSION
+  QUIZ
 }
 
 enum CourseStatus {
@@ -55,6 +53,8 @@ enum EnrollmentStatus {
   IN_PROGRESS
   COMPLETED
 }
+
+// --- MODEL AUTENTIKASI & PENGGUNA ---
 
 model Account {
   id                String  @id @default(cuid())
@@ -84,21 +84,17 @@ model Session {
 
 model User {
   id            String    @id @default(cuid())
-  name          String? // Dari model Profile lama Anda
-  bio           String? // Dari model Profile lama Anda
+  name          String?
+  bio           String?   @db.Text
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  walletAddress String    @unique
+  roles         String? // Disimpan sebagai JSON string
+  entityId      Int? // Link ke profil VerifiedEntity jika ada
 
-  // KOLOM KUSTOM KITA
-  walletAddress String  @unique // Dari model Profile lama Anda
-  roles         String? // Akan kita simpan sebagai JSON string: ["VERIFIED_ENTITY"]
-  entityId      Int?
-
-  accounts Account[]
-  sessions Session[]
-
-  // Relasi yang sebelumnya ada di Profile
+  accounts         Account[]
+  sessions         Session[]
   ownedCredentials CuratedCredential[]
   submissions      Submission[]
   enrollments      Enrollment[]
@@ -112,7 +108,9 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// --- MODEL INTI ---
+// --- MODEL INTI APLIKASI ---
+
+// Model untuk entitas terverifikasi (kreator kursus/kredensial)
 model VerifiedEntity {
   id                 Int                @id @default(autoincrement())
   name               String
@@ -127,155 +125,160 @@ model VerifiedEntity {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  // Relasi
-  sbtClaimProcess   VerifiedSbtClaimProcess?
-  createdTemplates  CredentialTemplate[]
-  issuedCredentials CuratedCredential[]
+  sbtClaimProcess    VerifiedSbtClaimProcess?
+  issuedCredentials  CuratedCredential[]
+  // Relasi ke Course dan Credential yang dibuat oleh entitas ini
+  createdCourses     Course[]
+  createdCredentials Credential[]
 }
 
-// Melacak proses klaim "Lencana Verified" oleh sebuah entitas.
+// Proses klaim lencana terverifikasi untuk sebuah entitas
 model VerifiedSbtClaimProcess {
-  id             String                 @id @default(cuid())
-  entityId       Int                    @unique
-  entity         VerifiedEntity         @relation(fields: [entityId], references: [id])
-  status         VerifiedSbtClaimStatus @default(NOT_REQUESTED)
-  cid            String?
-  tokenId        Int?                   @unique
-  requestTxHash  String?
-  approvalTxHash String?
-  claimTxHash    String?
-  approvedAt     DateTime?
-  claimedAt      DateTime?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id       String                 @id @default(cuid())
+  entityId Int                    @unique
+  entity   VerifiedEntity         @relation(fields: [entityId], references: [id])
+  status   VerifiedSbtClaimStatus @default(NOT_REQUESTED)
+  cid      String?
+  tokenId  Int?                   @unique
+  // ... field lainnya
 }
 
-// "Paket Kredensial" atau "Kursus" yang dibuat oleh VerifiedEntity.
-model CredentialTemplate {
-  id                      String         @id @default(cuid())
-  templateType            TemplateType   @default(CREDENTIAL)
-  title                   String
-  description             String
-  imageUrl                String
-  promoVideoUrl           String?
-  contractAddress         String         @unique
-  finalCredentialContract String?        @unique
-  category                String?
-  status                  CourseStatus   @default(DRAFT)
-  creatorId               Int
-  creator                 VerifiedEntity @relation(fields: [creatorId], references: [id])
+// --- MODEL COURSE & KONTENNYA (HASIL REFRACTOR) ---
 
+// Model untuk Kursus
+model Course {
+  id              String       @id @default(cuid())
+  title           String
+  description     String       @db.Text
+  imageUrl        String
+  contractAddress String       @unique
+  status          CourseStatus @default(DRAFT)
+  category        String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  creatorId Int
+  creator   VerifiedEntity @relation(fields: [creatorId], references: [id])
+
+  pricing     Pricing?
   modules     CourseModule[]
-  pricing     Pricing[] // BARU: Relasi ke model harga
   enrollments Enrollment[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  merkleRoot      String? // Opsional, hanya diisi untuk kampanye klaim
-  eligibleWallets Json? // Opsional, simpan daftar asli sebagai log
-
-  eligibilityList   EligibilityRecord[]
-  issuedCredentials CuratedCredential[]
 }
 
-// Modul di dalam sebuah CredentialTemplate (kursus).
+// Model untuk Modul di dalam sebuah Kursus
 model CourseModule {
-  id         String             @id @default(cuid())
-  templateId String
-  template   CredentialTemplate @relation(fields: [templateId], references: [id])
-
+  id              String     @id @default(cuid())
   stepNumber      Int
   title           String
   type            ModuleType
   durationMinutes Int?
+  contentText     String?    @db.Text
+  contentUrl      String?
+  quizData        Json?
 
-  // Konten (hanya salah satu yang diisi)
-  contentText String? @db.Text
-  contentUrl  String?
-  quizData    Json?
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  // Relasi ke submission tugas
   submissions Submission[]
 }
 
+// Model untuk Harga sebuah Kursus
 model Pricing {
-  id         String             @id @default(cuid())
-  templateId String             @unique
-  template   CredentialTemplate @relation(fields: [templateId], references: [id])
-
+  id       String      @id @default(cuid())
   type     PricingType @default(ONE_TIME)
   price    Decimal     @default(0.00) @db.Decimal(10, 2)
   currency String      @default("USD")
+
+  courseId String @unique
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
+// Model untuk Pendaftaran Pengguna ke sebuah Kursus
 model Enrollment {
-  id      String  @id @default(cuid())
-  userId  String?
-  student User?   @relation(fields: [userId], references: [id])
-
-  templateId String
-  course     CredentialTemplate @relation(fields: [templateId], references: [id])
-
+  id         String           @id @default(cuid())
   status     EnrollmentStatus @default(IN_PROGRESS)
-  progress   Int              @default(0) // Persentase kemajuan (0-100)
+  progress   Int              @default(0)
   enrolledAt DateTime         @default(now())
 
-  @@unique([userId, templateId])
+  userId  String
+  student User   @relation(fields: [userId], references: [id])
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
 }
 
-// Penyerahan tugas dari seorang pengguna untuk sebuah modul.
+// Model untuk Pengumpulan Tugas pada sebuah Modul
 model Submission {
-  id       String       @id @default(cuid())
+  id          String   @id @default(cuid())
+  fileUrl     String
+  notes       String?
+  isApproved  Boolean  @default(false)
+  submittedAt DateTime @default(now())
+
   moduleId String
   module   CourseModule @relation(fields: [moduleId], references: [id])
 
-  userId    String?
-  submitter User?   @relation(fields: [userId], references: [id])
-
-  fileUrl    String // Link ke file yang diunggah (misal: GitHub, Google Drive)
-  notes      String?
-  isApproved Boolean @default(false)
-
-  submittedAt DateTime @default(now())
+  userId    String
+  submitter User   @relation(fields: [userId], references: [id])
 }
 
-// Daftar pengguna yang berhak mengklaim kredensial final dari sebuah template.
+// --- MODEL CREDENTIAL & DISTRIBUSINYA (HASIL REFRACTOR) ---
+
+// Model untuk Template Kredensial (SBT)
+model Credential {
+  id              String   @id @default(cuid())
+  title           String
+  description     String   @db.Text
+  imageUrl        String
+  contractAddress String   @unique
+  merkleRoot      String? // Untuk metode klaim (Merkle Claim)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creatorId Int
+  creator   VerifiedEntity @relation(fields: [creatorId], references: [id])
+
+  eligibilityRecords EligibilityRecord[]
+  issuedCredentials  CuratedCredential[]
+}
+
+// Model untuk mencatat siapa saja yang berhak menerima sebuah Kredensial
 model EligibilityRecord {
-  id                String @id @default(cuid())
+  id                String   @id @default(cuid())
   userWalletAddress String
-  status            String @default("ELIGIBLE") // ELIGIBLE, CLAIMED
+  status            String   @default("ELIGIBLE") // ELIGIBLE, CLAIMED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  templateId String
-  template   CredentialTemplate @relation(fields: [templateId], references: [id])
+  credentialId String
+  credential   Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([templateId, userWalletAddress])
+  @@unique([credentialId, userWalletAddress])
 }
 
-// Cerminan off-chain dari setiap UserSBT yang sudah di-mint.
+// Model untuk Kredensial yang sudah diterbitkan/dicetak (instance NFT)
 model CuratedCredential {
   id          String                    @id @default(cuid())
   tokenId     String
   status      CredentialLifecycleStatus @default(ACTIVE)
   expiresAt   DateTime?
-  title       String
-  description String?
-  imageUrl    String
+  title       String // Cache dari Credential Template
+  description String?                   @db.Text // Cache dari Credential Template
+  imageUrl    String // Cache dari Credential Template
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
 
-  // Relasi
-  userId String?
-  owner  User?   @relation(fields: [userId], references: [id])
-
-  templateId String
-  template   CredentialTemplate @relation(fields: [templateId], references: [id])
+  userId String
+  owner  User   @relation(fields: [userId], references: [id])
 
   issuerId Int
   issuer   VerifiedEntity @relation(fields: [issuerId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Relasi ke template aslinya
+  credentialId String
+  credential   Credential @relation(fields: [credentialId], references: [id])
 
-  @@unique([templateId, tokenId])
+  @@unique([credentialId, tokenId])
 }

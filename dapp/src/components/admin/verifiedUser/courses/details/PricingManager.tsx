@@ -1,3 +1,5 @@
+// components/admin/verifiedUser/courses/details/PricingManager.tsx (Dioptimalkan)
+
 "use client";
 import { DollarSign, Loader2 } from "lucide-react";
 import {
@@ -9,91 +11,57 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import type { Pricing } from "@/types";
+import { useUpdateCourse } from "@/hooks/useUpdateCourse"; // Hook baru kita
+import { isAddress } from "viem";
 
-// FIX: Skema Zod diselaraskan dengan skema Prisma dan logika form.
-const pricingSchema = z.object({
-  type: z.enum(["FREE", "ONE_TIME", "SUBSCRIPTION"]),
-  price: z.coerce.number().min(0, "Harga tidak boleh negatif.").optional(),
-});
-
-type PricingFormData = z.infer<typeof pricingSchema>;
+type PricingFormData = {
+  price: string;
+  paymentToken: string;
+};
 
 export function PricingManager({ courseId }: { courseId: string }) {
   const [isLoading, setIsLoading] = useState(true);
+  const { isUpdating, updatePrice, updatePaymentToken } = useUpdateCourse();
+
   const {
     register,
     handleSubmit,
     setValue,
-    watch,
-    control,
-    formState: { isSubmitting, errors },
-  } = useForm<PricingFormData>({
-    resolver: zodResolver(pricingSchema),
-    defaultValues: {
-      type: "FREE",
-      price: 0,
-    },
-  });
-  const priceType = watch("type");
+    formState: { errors },
+  } = useForm<PricingFormData>();
 
+  // Di aplikasi nyata, Anda akan mengambil data on-chain atau dari DB
   useEffect(() => {
-    const fetchPricing = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/admin/courses/${courseId}/pricing`);
-        if (res.ok) {
-          const data: Pricing | null = await res.json();
-          if (data) {
-            setValue("type", data.type);
-            setValue("price", Number(data.price));
-          }
-        }
-      } catch {
-        toast.error("Gagal memuat data harga.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchPricing();
+    // Placeholder untuk mengambil data harga & token saat ini
+    // const fetchCurrentPricing = async () => { ... }
+    // fetchCurrentPricing();
+    setIsLoading(false);
   }, [courseId, setValue]);
 
-  const onSubmit = async (data: PricingFormData) => {
-    const payload = {
-      ...data,
-      price: data.type === "FREE" ? 0 : data.price || 0,
-    };
+  const handlePriceSubmit = async (data: PricingFormData) => {
+    await updatePrice(courseId as `0x${string}`, data.price);
+  };
 
-    try {
-      const res = await fetch(`/api/admin/courses/${courseId}/pricing`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error("Gagal menyimpan harga.");
-      toast.success("Pengaturan harga berhasil disimpan.");
-    } catch (error) {
-      toast.error("Gagal menyimpan", { description: (error as Error).message });
+  const handleTokenSubmit = async (data: PricingFormData) => {
+    if (!isAddress(data.paymentToken)) {
+      toast.error("Alamat token tidak valid.");
+      return;
     }
+    await updatePaymentToken(
+      courseId as `0x${string}`,
+      data.paymentToken as `0x${string}`
+    );
   };
 
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="flex justify-center p-8">
+        <CardContent className="p-8 flex justify-center">
           <Loader2 className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
@@ -104,52 +72,59 @@ export function PricingManager({ courseId }: { courseId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <DollarSign /> Pengaturan Harga
+          <DollarSign /> Pengaturan Harga & Pembayaran
         </CardTitle>
         <CardDescription>
-          Atur model harga dan biaya untuk kursus Anda.
+          Kelola harga dan token pembayaran kursus Anda secara on-chain.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <CardContent className="space-y-8">
+        {/* Form untuk Update Harga */}
+        <form onSubmit={handleSubmit(handlePriceSubmit)} className="space-y-3">
           <div>
-            <Label>Model Harga</Label>
-            <Controller
-              control={control}
-              name="type"
-              render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FREE">Gratis</SelectItem>
-                    <SelectItem value="ONE_TIME">Sekali Bayar</SelectItem>
-                    <SelectItem value="SUBSCRIPTION">Berlangganan</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+            <Label htmlFor="price">Ubah Harga (dalam ETH/Token)</Label>
+            <Input
+              id="price"
+              type="number"
+              step="0.001"
+              placeholder="0.05"
+              {...register("price", { required: "Harga wajib diisi" })}
             />
+            {errors.price && (
+              <p className="text-sm text-destructive mt-1">
+                {errors.price.message}
+              </p>
+            )}
           </div>
-          {priceType !== "FREE" && (
-            <div>
-              <Label>Harga (USDC)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="25.00"
-                {...register("price")}
-              />
-              {errors.price && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.price.message}
-                </p>
-              )}
-            </div>
-          )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Simpan Harga
+          <Button type="submit" disabled={isUpdating}>
+            {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Perbarui Harga
+          </Button>
+        </form>
+
+        {/* Form untuk Update Token Pembayaran */}
+        <form
+          onSubmit={handleSubmit(handleTokenSubmit)}
+          className="space-y-3 border-t pt-6"
+        >
+          <div>
+            <Label htmlFor="paymentToken">Ubah Token Pembayaran</Label>
+            <Input
+              id="paymentToken"
+              placeholder="0x... (isi 0x0...0 untuk ETH)"
+              {...register("paymentToken", {
+                required: "Alamat token wajib diisi",
+              })}
+            />
+            {errors.paymentToken && (
+              <p className="text-sm text-destructive mt-1">
+                {errors.paymentToken.message}
+              </p>
+            )}
+          </div>
+          <Button type="submit" disabled={isUpdating}>
+            {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Perbarui Token
           </Button>
         </form>
       </CardContent>

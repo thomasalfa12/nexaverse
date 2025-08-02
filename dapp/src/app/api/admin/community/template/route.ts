@@ -1,29 +1,24 @@
+// src/app/api/admin/community/template/route.ts (Sudah Diperbaiki)
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-// GANTI: Impor getAppSession dari lib/auth
 import { getAppSession } from "@/lib/auth";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // GANTI: Gunakan getAppSession untuk mendapatkan data user
     const session = await getAppSession();
     
-    // Sesuaikan pengecekan dengan objek session baru
-    if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY")) {
+    if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY") || !session.user.entityId) {
       return NextResponse.json({ error: "Akses ditolak" }, { status: 401 });
     }
 
-    // Gunakan `entityId` langsung dari sesi untuk keamanan dan efisiensi
-    if (!session.user.entityId) {
-       return NextResponse.json({ error: "ID Entitas tidak ditemukan di sesi" }, { status: 404 });
-    }
-
-    const templates = await prisma.credentialTemplate.findMany({
+    // FIX: Mengganti prisma.credentialTemplate menjadi prisma.course
+    const courses = await prisma.course.findMany({
       where: { 
-        creatorId: session.user.entityId, // Gunakan ID dari sesi
-        templateType: 'COURSE'
+        creatorId: session.user.entityId,
+        // FIX: Menghapus 'templateType: 'COURSE'' karena sudah tidak relevan
       },
       include: {
         modules: {
@@ -31,9 +26,8 @@ export async function GET() {
         },
         _count: {
           select: {
-            eligibilityList: true,
-            issuedCredentials: true,
-            enrollments: true,
+            // FIX: Menyesuaikan _count hanya untuk relasi yang ada di model Course
+            enrollments: true, 
           },
         },
         creator: { select: { name: true } },
@@ -42,9 +36,9 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(templates);
+    return NextResponse.json(courses);
   } catch (error) {
-    console.error("Gagal mengambil data template:", error);
+    console.error("Gagal mengambil data kursus:", error);
     return NextResponse.json({ error: "Terjadi kesalahan pada server" }, { status: 500 });
   }
 }

@@ -1,3 +1,5 @@
+// hooks/useOnchainEnrollment.ts (Dioptimalkan)
+
 "use client";
 
 import { useReadContract, useAccount } from "wagmi";
@@ -6,23 +8,22 @@ import { contracts } from "@/lib/contracts";
 export function useOnchainEnrollment(courseContractAddress?: `0x${string}`) {
   const { address: userAddress } = useAccount();
 
-  // KUNCI: Kita memanggil fungsi `balanceOf` dari standar ERC721.
-  // Fungsi ini akan mengembalikan jumlah NFT (kredensial kursus) yang
-  // dimiliki oleh pengguna. Jika > 0, berarti mereka sudah terdaftar.
-  const { data: balance, isLoading, refetch } = useReadContract({
+  // KUNCI: Kita memanggil fungsi `getStudentInfo` yang lebih efisien.
+  // Fungsi ini secara eksplisit dibuat untuk mengecek status pendaftaran
+  // dan mengembalikan boolean secara langsung.
+  const { data, isLoading, refetch } = useReadContract({
     address: courseContractAddress,
-    abi: contracts.courseManager.abi,
-    functionName: 'balanceOf',
+    abi: contracts.nexaCourse.abi, // Menggunakan ABI logika yang benar
+    functionName: 'getStudentInfo',
     args: userAddress ? [userAddress] : undefined,
-    // Query hanya akan aktif jika kita memiliki alamat kontrak dan alamat pengguna
     query: { 
       enabled: !!courseContractAddress && !!userAddress,
-      // Query hanya akan aktif jika kita memiliki alamat kontrak dan alamat pengguna
     },
   });
 
-  // Logika untuk mengubah hasil `balanceOf` (bigint) menjadi `isEnrolled` (boolean)
-  const isEnrolled = typeof balance === "bigint" && balance > 0n;
+  // `data` akan berupa array: [isEnrolled (boolean), tokenId (bigint)]
+  // Kita hanya perlu mengambil elemen pertama.
+  const isEnrolled = Array.isArray(data) ? data[0] : false;
 
   return { 
     isEnrolled, 

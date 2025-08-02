@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-
+import { CourseStatus } from "@prisma/client";
 interface DecodedToken { address: string; roles: string[]; }
 
 const moduleSchema = z.object({
@@ -44,26 +44,29 @@ export async function POST(req: Request) {
     }
     
     // FIX: Mengambil data baru dari body yang divalidasi
-    const { title, description, imageUrl, category, promoVideoUrl, modules } = validation.data;
+    const { title, description, imageUrl, category, modules } = validation.data;
     const placeholderContractAddress = `0x${[...Array(40)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
 
     const newCourse = await prisma.$transaction(async (tx) => {
-      const createdTemplate = await tx.credentialTemplate.create({
+      // FIX 1: Mengganti 'credentialTemplate.create' menjadi 'course.create'
+      const createdCourse = await tx.course.create({
         data: { 
           title, 
           description, 
           imageUrl,
-          category,         // Simpan data baru
-          promoVideoUrl,    // Simpan data baru
+          category: category || "Uncategorized", // Beri nilai default jika kosong
+          // promoVideoUrl tidak ada di skema Course, jadi dihapus
           contractAddress: placeholderContractAddress, 
-          creatorId: creator.id 
+          creatorId: creator.id,
+          status: CourseStatus.DRAFT, // Kursus baru selalu dimulai sebagai draft
         },
       });
 
-      await Promise.all(
+
+       await Promise.all(
         modules.map((module, index) => tx.courseModule.create({
           data: {
-            templateId: createdTemplate.id,
+            courseId: createdCourse.id, // Relasi ke Course
             stepNumber: index + 1,
             title: module.title,
             type: module.type,
@@ -73,8 +76,8 @@ export async function POST(req: Request) {
         }))
       );
 
-      return tx.credentialTemplate.findUnique({
-        where: { id: createdTemplate.id },
+            return tx.course.findUnique({
+        where: { id: createdCourse.id },
         include: { modules: true },
       });
     });

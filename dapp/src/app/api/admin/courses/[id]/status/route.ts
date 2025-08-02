@@ -29,15 +29,16 @@ export async function PUT(
 
     // 4. GANTI: Query update yang lebih aman dan efisien
     // Ini memastikan pengguna hanya bisa mengubah status kursus miliknya sendiri.
-    const updateResult = await prisma.credentialTemplate.updateMany({
-      where: { 
-        id: params.courseId, 
-        creatorId: session.user.entityId, // Cek kepemilikan
+        const updateResult = await prisma.course.updateMany({
+      where: {
+        id: params.courseId,
+        creatorId: session.user.entityId,
       },
-      data: { 
-        status: validation.data.status 
+      data: {
+        status: validation.data.status
       },
     });
+
 
     // Periksa apakah ada baris yang berhasil diupdate
     if (updateResult.count === 0) {

@@ -1,10 +1,12 @@
+// hooks/useCreateCourse.ts (Diperbarui untuk Proxy Factory)
+
 "use client";
 
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAccount, useWriteContract, usePublicClient } from "wagmi";
 import { parseEventLogs, type Log, parseEther } from "viem";
-import { contracts } from "@/lib/contracts";
+import { contracts } from "@/lib/contracts"; // Pastikan ini berisi ABI & alamat factory baru
 import { prepareTemplateMetadataAction } from "@/lib/server/actions/prepareTemplateMetadataAction";
 import { saveCourseAction } from "@/lib/server/actions/saveCourseAction";
 
@@ -14,6 +16,7 @@ type CreateCourseArgs = {
   image: File;
   price: number;
   category: string;
+  // Tambahkan paymentToken jika Anda ingin user memilih
 };
 
 type DecodedLog = Log & {
@@ -28,7 +31,7 @@ export function useCreateCourse({ onSuccess }: { onSuccess: () => void }) {
   
   const createCourse = async (values: CreateCourseArgs) => {
     if (!userAddress || !publicClient) {
-      toast.error("Dompet tidak terhubung atau jaringan tidak siap.");
+      toast.error("Dompet tidak terhubung.");
       return;
     }
 
@@ -36,7 +39,7 @@ export function useCreateCourse({ onSuccess }: { onSuccess: () => void }) {
     const toastId = toast.loading("Mempersiapkan metadata kursus...");
 
     try {
-      // LANGKAH 1: Persiapan Metadata
+      // LANGKAH 1: Persiapan Metadata (tidak berubah)
       const symbol = `NEXA-${(values.title.substring(0, 4)).toUpperCase()}`;
       const formData = new FormData();
       formData.append('title', values.title);
@@ -50,29 +53,29 @@ export function useCreateCourse({ onSuccess }: { onSuccess: () => void }) {
       }
       const { metadataURI, imageUrl } = metadataResult;
 
-      // LANGKAH 2: Deploy Kontrak Kursus
+      // LANGKAH 2: Deploy Proxy melalui Factory Baru
       toast.loading("Menunggu persetujuan untuk deploy kursus...", { id: toastId });
       
       const deployTxHash = await writeContractAsync({
-        address: contracts.courseFactory.address,
-        abi: contracts.courseFactory.abi,
+        address: contracts.nexaCourseFactory.address, // Alamat factory baru
+        abi: contracts.nexaCourseFactory.abi,         // ABI factory baru
         functionName: 'createCourse',
         args: [
           values.title,
           symbol,
           parseEther(values.price.toString()),
-          "0x0000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000", // Default ke ETH
           metadataURI
         ],
       });
 
-      // LANGKAH 3: Tunggu Konfirmasi & Simpan ke DB
+      // LANGKAH 3: Tunggu Konfirmasi & Simpan ke DB (tidak banyak berubah)
       toast.loading("Men-deploy kursus... Menunggu konfirmasi on-chain.", { id: toastId });
       
       const receipt = await publicClient.waitForTransactionReceipt({ hash: deployTxHash });
-      if (receipt.status === 'reverted') throw new Error("Transaksi deployment kursus gagal.");
+      if (receipt.status === 'reverted') throw new Error("Transaksi deployment gagal.");
 
-      const logs = parseEventLogs({ abi: contracts.courseFactory.abi, logs: receipt.logs, eventName: 'CourseCreated' });
+      const logs = parseEventLogs({ abi: contracts.nexaCourseFactory.abi, logs: receipt.logs, eventName: 'CourseCreated' });
       const newContractAddress = (logs[0] as DecodedLog).args.courseContract;
       if (!newContractAddress) throw new Error("Gagal mendapatkan alamat kontrak kursus baru.");
       
