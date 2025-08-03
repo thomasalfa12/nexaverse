@@ -1,36 +1,34 @@
-// app/api/me/enrollments/[courseId]/route.ts (Sudah Diperbaiki)
-
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/server/prisma";
 import { getAppSession } from "@/lib/auth";
+import { prisma } from "@/lib/server/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ id: string }> } // Ubah ke Promise
 ) {
   try {
     const session = await getAppSession();
-    if (!session?.user?.id) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id: courseId } = await params; // Await params dulu
+
     const enrollment = await prisma.enrollment.findUnique({
       where: {
-        // FIX: Menggunakan indeks unik gabungan yang benar: userId_courseId
         userId_courseId: {
           userId: session.user.id,
-          courseId: params.courseId,
+          courseId: courseId,
         },
       },
     });
 
-    if (enrollment) {
-      return NextResponse.json(enrollment);
-    } else {
-      return NextResponse.json({ error: "Tidak terdaftar" }, { status: 404 });
-    }
+    return NextResponse.json({ enrollment });
   } catch (error) {
-    console.error("Error checking enrollment:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("[API ERROR] Gagal mengambil enrollment:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

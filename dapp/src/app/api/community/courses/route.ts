@@ -1,82 +1,105 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
-import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
-import { CourseStatus } from "@prisma/client";
-interface DecodedToken { address: string; roles: string[]; }
+import { getAppSession } from "@/lib/auth";
+import { z } from "zod";
+import { CourseStatus, Prisma } from "@prisma/client";
 
-const moduleSchema = z.object({
-  title: z.string().min(3, "Judul modul minimal 3 karakter."),
-  type: z.enum(["CONTENT", "LIVE_SESSION", "SUBMISSION"]),
-  contentText: z.string().optional(),
-  contentUrl: z.string().url("URL tidak valid.").or(z.literal("")).optional(),
+// --- Skema Validasi Backend yang Mencerminkan Frontend ---
+
+const quizQuestionSchema = z.object({
+  questionText: z.string().min(5),
+  options: z.array(z.string().min(1)).length(4),
+  correctAnswerIndex: z.coerce.number().min(0).max(3),
 });
 
-// FIX: Menambahkan `category` dan `promoVideoUrl` ke skema backend
+const moduleBaseSchema = z.object({
+  title: z.string().min(3, "Judul modul minimal 3 karakter."),
+  type: z.enum(["CONTENT", "LIVE_SESSION", "SUBMISSION", "QUIZ"]),
+  textContent: z.string().optional(),
+  meetingUrl: z.string().url().optional(),
+  sessionTime: z.coerce.date().optional(),
+  assignmentInstructions: z.string().optional(),
+  quizData: z.object({ questions: z.array(quizQuestionSchema).min(1) }).optional(),
+});
+
 const createCourseSchema = z.object({
   title: z.string().min(5, "Judul kursus minimal 5 karakter."),
   description: z.string().min(10, "Deskripsi minimal 10 karakter."),
   imageUrl: z.string().url("URL gambar tidak valid."),
-  category: z.string().optional(),
-  promoVideoUrl: z.string().url("URL video tidak valid.").or(z.literal("")).optional(),
-  modules: z.array(moduleSchema).min(1, "Kursus harus memiliki setidaknya 1 modul."),
+  category: z.string().min(1, "Kategori wajib dipilih."),
+  price: z.coerce.number().min(0),
+  modules: z.array(moduleBaseSchema).min(1, "Kursus harus memiliki setidaknya 1 modul."),
 });
 
 export async function POST(req: Request) {
   try {
-    const cookieStore = cookies();
-    const token = (await cookieStore).get("nexa_session")?.value;
-    if (!token) return NextResponse.json({ error: "Tidak terautentikasi" }, { status: 401 });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedToken;
-    if (!decoded.roles.includes("VERIFIED_ENTITY")) {
-      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+    // 1. Otentikasi & Otorisasi menggunakan NextAuth.js
+    const session = await getAppSession();
+    if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY") || !session.user.entityId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const creator = await prisma.verifiedEntity.findUnique({ where: { walletAddress: decoded.address } });
-    if (!creator) return NextResponse.json({ error: "Entitas kreator tidak ditemukan" }, { status: 404 });
-
+    // 2. Validasi Input
     const body = await req.json();
     const validation = createCourseSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
     }
     
-    // FIX: Mengambil data baru dari body yang divalidasi
-    const { title, description, imageUrl, category, modules } = validation.data;
-    const placeholderContractAddress = `0x${[...Array(40)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-
+    const { title, description, imageUrl, category, price, modules } = validation.data;
+    
+    // 3. Simpan ke Database menggunakan Transaksi
     const newCourse = await prisma.$transaction(async (tx) => {
-      // FIX 1: Mengganti 'credentialTemplate.create' menjadi 'course.create'
       const createdCourse = await tx.course.create({
         data: { 
           title, 
           description, 
           imageUrl,
-          category: category || "Uncategorized", // Beri nilai default jika kosong
-          // promoVideoUrl tidak ada di skema Course, jadi dihapus
-          contractAddress: placeholderContractAddress, 
-          creatorId: creator.id,
-          status: CourseStatus.DRAFT, // Kursus baru selalu dimulai sebagai draft
+          category,
+          // Alamat kontrak akan diisi nanti saat proses deploy on-chain
+          contractAddress: `placeholder-${Date.now()}`, 
+          creatorId: session.user.entityId!,
+          status: CourseStatus.DRAFT,
+          pricing: {
+            create: {
+              type: price > 0 ? 'ONE_TIME' : 'FREE',
+              price: price,
+              currency: 'ETH', // Asumsi mata uang
+            }
+          },
         },
       });
 
-
-       await Promise.all(
-        modules.map((module, index) => tx.courseModule.create({
+      // Buat semua modul dan konten spesifiknya
+      for (const [index, moduleData] of modules.entries()) {
+        const createdModule = await tx.courseModule.create({
           data: {
-            courseId: createdCourse.id, // Relasi ke Course
+            courseId: createdCourse.id,
             stepNumber: index + 1,
-            title: module.title,
-            type: module.type,
-            contentText: module.contentText,
-            contentUrl: module.contentUrl || null,
-          },
-        }))
-      );
+            title: moduleData.title,
+            type: moduleData.type,
+          }
+        });
 
-            return tx.course.findUnique({
+        // Buat entri di tabel konten yang sesuai
+        switch (moduleData.type) {
+          case 'CONTENT':
+            if (moduleData.textContent) await tx.moduleText.create({ data: { moduleId: createdModule.id, content: moduleData.textContent } });
+            break;
+          case 'LIVE_SESSION':
+            if (moduleData.meetingUrl && moduleData.sessionTime) await tx.moduleLiveSession.create({ data: { moduleId: createdModule.id, meetingUrl: moduleData.meetingUrl, sessionTime: moduleData.sessionTime } });
+            break;
+          case 'SUBMISSION':
+            if (moduleData.assignmentInstructions) await tx.moduleAssignment.create({ data: { moduleId: createdModule.id, instructions: moduleData.assignmentInstructions } });
+            break;
+          case 'QUIZ':
+            if (moduleData.quizData) await tx.moduleQuiz.create({ data: { moduleId: createdModule.id, questions: moduleData.quizData as Prisma.InputJsonValue } });
+            break;
+        }
+      }
+
+      // Kembalikan data kursus yang baru dibuat beserta modulnya
+      return tx.course.findUnique({
         where: { id: createdCourse.id },
         include: { modules: true },
       });

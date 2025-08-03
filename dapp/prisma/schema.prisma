@@ -167,30 +167,77 @@ model Course {
 
 // Model untuk Modul di dalam sebuah Kursus
 model CourseModule {
-  id              String     @id @default(cuid())
-  stepNumber      Int
-  title           String
-  type            ModuleType
-  durationMinutes Int?
-  contentText     String?    @db.Text
-  contentUrl      String?
-  quizData        Json?
+  id         String     @id @default(cuid())
+  stepNumber Int
+  title      String
+  type       ModuleType // Menentukan jenis konten modul
 
   courseId String
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
+  // RELASI EKSKLUSIF: Hanya salah satu dari ini yang akan terisi
+  textContent  ModuleText?
+  videoContent ModuleVideo?
+  liveSession  ModuleLiveSession?
+  assignment   ModuleAssignment?
+  quiz         ModuleQuiz?
+
   submissions Submission[]
+}
+
+model ModuleText {
+  id      String @id @default(cuid())
+  content String @db.Text // Konten dalam format Markdown atau HTML
+
+  moduleId String       @unique
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model ModuleVideo {
+  id       String @id @default(cuid())
+  videoUrl String // URL ke Mux, YouTube, Vimeo
+  duration Int? // Durasi dalam detik
+
+  moduleId String       @unique
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model ModuleLiveSession {
+  id          String   @id @default(cuid())
+  meetingUrl  String
+  sessionTime DateTime // Tanggal dan waktu sesi live
+  description String?  @db.Text
+
+  moduleId String       @unique
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model ModuleAssignment {
+  id           String    @id @default(cuid())
+  instructions String    @db.Text // Instruksi tugas dalam format Markdown
+  deadline     DateTime? // Batas waktu pengumpulan
+
+  moduleId String       @unique
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model ModuleQuiz {
+  id        String @id @default(cuid())
+  questions Json // Simpan array pertanyaan dan jawaban sebagai JSON
+
+  moduleId String       @unique
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 }
 
 // Model untuk Harga sebuah Kursus
 model Pricing {
-  id       String      @id @default(cuid())
-  type     PricingType @default(ONE_TIME)
-  price    Decimal     @default(0.00) @db.Decimal(10, 2)
-  currency String      @default("USD")
-
-  courseId String @unique
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  type         PricingType @default(ONE_TIME)
+  price        Decimal     @default(0.00) @db.Decimal(10, 2)
+  currency     String      @default("USD")
+  paymentToken String?
+  courseId     String      @unique
+  course       Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 // Model untuk Pendaftaran Pengguna ke sebuah Kursus

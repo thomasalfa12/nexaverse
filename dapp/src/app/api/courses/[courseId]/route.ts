@@ -1,35 +1,48 @@
-// src/app/api/course/[courseId]/modules/route.ts (Sudah Diperbaiki)
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
-import { CourseStatus } from "@prisma/client"; // Impor enum
+import { CourseStatus } from "@prisma/client";
 
 export async function GET(
   request: Request,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> } // Ubah ke Promise
 ) {
   try {
-    const courseId = params.courseId;
+    const { courseId } = await params; // Await params dulu
+    
+    console.log("[DEBUG] Mencari kursus dengan ID:", courseId);
 
     if (!courseId) {
       return NextResponse.json({ error: "ID Kursus tidak valid" }, { status: 400 });
     }
 
-    // FIX: Mengganti query ke model `Course`
-    const course = await prisma.course.findFirst({
-      where: { 
-        id: courseId, 
-        status: CourseStatus.PUBLISHED // Menggunakan enum
-      },
+    const courseExists = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true, status: true, title: true }
+    });
+
+    console.log("[DEBUG] Kursus ditemukan:", courseExists);
+
+    if (!courseExists) {
+      return NextResponse.json({ 
+        error: "Kursus dengan ID tersebut tidak ditemukan di database" 
+      }, { status: 404 });
+    }
+
+    if (courseExists.status !== CourseStatus.PUBLISHED) {
+      return NextResponse.json({ 
+        error: `Kursus "${courseExists.title}" belum dipublikasikan (status: ${courseExists.status})` 
+      }, { status: 403 });
+    }
+
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
       include: {
-        // Semua relasi di bawah ini sudah benar sesuai skema baru
         modules: { 
           orderBy: { stepNumber: 'asc' },
           select: {
             id: true,
             title: true,
             type: true,
-            durationMinutes: true,
             stepNumber: true,
           }
         },
@@ -43,13 +56,12 @@ export async function GET(
       },
     });
 
-    if (!course) {
-      return NextResponse.json({ error: "Kursus tidak ditemukan atau belum dipublikasikan" }, { status: 404 });
-    }
-
     return NextResponse.json(course);
   } catch (error) {
-    console.error(`[API ERROR] Gagal mengambil kursus ${params.courseId}:`, error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error(`[API ERROR] Gagal mengambil kursus:`, error);
+    return NextResponse.json({ 
+      error: "Internal Server Error",
+      details: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 });
   }
 }

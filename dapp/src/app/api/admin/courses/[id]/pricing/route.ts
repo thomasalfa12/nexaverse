@@ -3,30 +3,30 @@ import { prisma } from "@/lib/server/prisma";
 import { getAppSession } from "@/lib/auth";
 import { z } from "zod";
 
+// FIX: Skema dibuat lebih fleksibel dengan `.partial()`
+// Ini memungkinkan frontend mengirim hanya field yang ingin diubah.
 const pricingSchema = z.object({
-  type: z.enum(["FREE", "ONE_TIME"]),
-  price: z.coerce.number().min(0, "Harga tidak boleh negatif."),
-  currency: z.string().default("ETH"),
-});
+  type: z.enum(["FREE", "ONE_TIME"]).optional(),
+  price: z.coerce.number().min(0, "Harga tidak boleh negatif.").optional(),
+  currency: z.string().optional(),
+  paymentToken: z.string().optional(), // Tambahkan paymentToken
+}).partial();
 
 // Handler untuk MENDAPATKAN data harga
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } } // FIX: Gunakan 'id' sesuai nama folder [id]
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getAppSession();
-    // FIX: Tambahkan pengecekan !session.user.entityId untuk otorisasi yang lebih kuat
-    // Ini juga akan menyelesaikan error TypeScript.
     if (!session?.user?.id || !session.user.roles.includes("VERIFIED_ENTITY") || !session.user.entityId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const pricing = await prisma.pricing.findUnique({
       where: {
-        courseId: params.id, // FIX: Gunakan params.id
+        courseId: params.id,
         course: {
-          // Sekarang TypeScript tahu `entityId` adalah number, bukan null.
           creatorId: session.user.entityId,
         }
       },
@@ -46,7 +46,7 @@ export async function GET(
 // Handler untuk MEMPERBARUI data harga
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } } // FIX: Gunakan 'id' sesuai nama folder [id]
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getAppSession();
@@ -55,7 +55,7 @@ export async function PUT(
     }
 
     const course = await prisma.course.findUnique({
-      where: { id: params.id }, // FIX: Gunakan params.id
+      where: { id: params.id },
       select: { creatorId: true }
     });
 
@@ -68,12 +68,22 @@ export async function PUT(
     if (!validation.success) {
       return NextResponse.json({ error: "Data tidak valid", details: validation.error.flatten() }, { status: 400 });
     }
-    const { type, price, currency } = validation.data;
+    
+    // Data yang divalidasi sekarang bisa berisi field apa pun dari skema
+    const dataToUpdate = validation.data;
 
     const updatedPricing = await prisma.pricing.upsert({
-      where: { courseId: params.id }, // FIX: Gunakan params.id
-      update: { type, price, currency },
-      create: { courseId: params.id, type, price, currency },
+      where: { courseId: params.id },
+      // Kirim hanya data yang divalidasi
+      update: dataToUpdate,
+      // Untuk `create`, kita perlu memastikan semua field wajib ada
+      create: { 
+        courseId: params.id, 
+        type: dataToUpdate.type || 'FREE',
+        price: dataToUpdate.price || 0,
+        currency: dataToUpdate.currency || 'ETH',
+        paymentToken: dataToUpdate.paymentToken,
+      },
     });
 
     return NextResponse.json(updatedPricing);

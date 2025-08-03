@@ -4,14 +4,13 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { SiweMessage } from "siwe";
-import { createPublicClient, http } from "viem";
-import { base, baseSepolia, linea, mainnet } from "viem/chains";
-import { isEqual } from "lodash"; // Import lodash for deep comparison
+import { isEqual } from "lodash";
 
 import { prisma } from "@/lib/server/prisma";
-import { contracts } from "@/lib/contracts";
+// Impor helper spesialis kita
+import { getAndSyncOnchainData } from "@/lib/server/roles";
 
-// Tipe data kustom untuk hasil dari fungsi authorize
+// Tipe data kustom untuk kejelasan
 type AuthorizeResult = {
   id: string;
   walletAddress: string;
@@ -21,109 +20,6 @@ type AuthorizeResult = {
   image: string | null;
   email: string | null;
 }
-
-// =================================================================
-// HELPER UNTUK PENGECEKAN PERAN (DENGAN RESOLUSI NAMA MULTI-CHAIN)
-// =================================================================
-
-const baseClient = createPublicClient({
-  chain: base,
-  transport: http(process.env.NEXT_PUBLIC_BASE_RPC_URL),
-});
-
-const lineaClient = createPublicClient({
-  chain: linea,
-  transport: http(process.env.NEXT_PUBLIC_LINEA_RPC_URL),
-});
-
-const mainnetClient = createPublicClient({
-  chain: mainnet,
-  transport: http(process.env.NEXT_PUBLIC_MAINNET_RPC_URL),
-});
-
-const contractClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(process.env.NEXT_PUBLIC_RPC_URL),
-});
-
-async function getOnchainData(address: `0x${string}`, chainId: number) {
-  const roles: string[] = [];
-  let entityId: number | null = null;
-  const lowerCaseAddress = address.toLowerCase();
-
-  try {
-    const [ownerRegistry, balance] = await Promise.all([
-      contractClient.readContract({
-        address: contracts.registry.address,
-        abi: contracts.registry.abi,
-        functionName: 'owner',
-      }) as Promise<`0x${string}`>,
-      contractClient.readContract({
-        address: contracts.verified.address,
-        abi: contracts.verified.abi,
-        functionName: 'balanceOf',
-        args: [address],
-      }) as Promise<bigint>,
-    ]);
-
-    if (lowerCaseAddress === ownerRegistry.toLowerCase()) {
-      roles.push('REGISTRY_ADMIN');
-    }
-
-    if (balance > 0n) {
-      roles.push('VERIFIED_ENTITY');
-      
-      let entityName: string | null = null;
-
-      try {
-        if (chainId === base.id) {
-            entityName = await baseClient.getEnsName({ address });
-            if (entityName) console.log(`Resolved Base Name Service for ${address}: ${entityName}`);
-        } else if (chainId === linea.id) {
-            entityName = await lineaClient.getEnsName({ address });
-            if (entityName) console.log(`Resolved Linea Name Service for ${address}: ${entityName}`);
-        }
-      } catch (l2EnsError) {
-        console.warn(`Could not resolve L2 name for ${address}:`, l2EnsError);
-      }
-
-      if (!entityName) {
-          try {
-              entityName = await mainnetClient.getEnsName({ address });
-              if (entityName) console.log(`Resolved Mainnet ENS for ${address}: ${entityName}`);
-          } catch (mainnetEnsError) {
-              console.warn(`Could not resolve Mainnet ENS for ${address}:`, mainnetEnsError);
-          }
-      }
-      
-      const finalEntityName = entityName || `Verified Entity ${address.slice(0, 6)}...`;
-
-      const entity = await prisma.verifiedEntity.upsert({
-        where: { walletAddress: lowerCaseAddress },
-        update: { status: 'REGISTERED' },
-        create: {
-            walletAddress: lowerCaseAddress,
-            name: finalEntityName,
-            bio: "Please update your entity biography.",
-            primaryUrl: "",
-            contactEmail: "",
-            entityType: 2, 
-            status: 'REGISTERED',
-        }
-      });
-      
-      entityId = entity.id;
-    }
-  } catch (error) {
-    console.error("Gagal mengambil atau menyinkronkan data on-chain:", error);
-  }
-
-  return { roles, entityId };
-}
-
-// =================================================================
-// KONFIGURASI UTAMA NEXTAUTH.JS
-// =================================================================
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -138,47 +34,40 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials): Promise<AuthorizeResult | null> {
         try {
           const siwe = new SiweMessage(JSON.parse(credentials?.message || "{}"));
-          const result = await siwe.verify({
-            signature: credentials?.signature || "",
-          });
+          const result = await siwe.verify({ signature: credentials?.signature || "" });
 
           if (!result.success) throw new Error("Invalid signature.");
 
           const userAddress = result.data.address.toLowerCase();
           const chainId = result.data.chainId;
 
-          // KUNCI PERBAIKAN: Panggil getOnchainData untuk SEMUA pengguna, baik baru maupun lama.
-          const { roles: onchainRoles, entityId: onchainEntityId } = await getOnchainData(userAddress as `0x${string}`, chainId);
+          // Panggil helper spesialis kita
+          const { roles: onchainRoles, entityId: onchainEntityId } = await getAndSyncOnchainData(userAddress as `0x${string}`, chainId);
 
-          let user = await prisma.user.findUnique({
-            where: { walletAddress: userAddress },
-          });
-
-          // Jika pengguna tidak ada, buat baru.
-          if (!user) {
-            user = await prisma.user.create({
-              data: {
-                walletAddress: userAddress,
-                roles: JSON.stringify(onchainRoles),
-                entityId: onchainEntityId,
-              },
+          // Logika sinkronisasi cerdas di dalam transaksi database
+          const user = await prisma.$transaction(async (tx) => {
+            const existingUser = await tx.user.findUnique({
+              where: { walletAddress: userAddress },
             });
-          } else {
-            // Jika pengguna sudah ada, bandingkan data dan update jika perlu.
-            const storedRoles = user.roles ? JSON.parse(user.roles) : [];
-            const isDataStale = !isEqual(storedRoles.sort(), onchainRoles.sort()) || user.entityId !== onchainEntityId;
 
-            if (isDataStale) {
-              console.log(`Data usang untuk ${userAddress}. Memperbarui...`);
-              user = await prisma.user.update({
-                where: { walletAddress: userAddress },
-                data: {
-                  roles: JSON.stringify(onchainRoles),
-                  entityId: onchainEntityId,
-                },
+            if (!existingUser) {
+              return tx.user.create({
+                data: { walletAddress: userAddress, roles: JSON.stringify(onchainRoles), entityId: onchainEntityId },
               });
             }
-          }
+
+            const storedRoles = existingUser.roles ? JSON.parse(existingUser.roles) : [];
+            const isDataStale = !isEqual(storedRoles.sort(), onchainRoles.sort()) || existingUser.entityId !== onchainEntityId;
+
+            if (isDataStale) {
+              return tx.user.update({
+                where: { walletAddress: userAddress },
+                data: { roles: JSON.stringify(onchainRoles), entityId: onchainEntityId },
+              });
+            }
+            
+            return existingUser;
+          });
 
           return {
             id: user.id,
@@ -209,9 +98,7 @@ export const authOptions: NextAuthOptions = {
         token.email = customUser.email;
       }
       if (trigger === "update" && session) {
-        const latestUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-        });
+        const latestUser = await prisma.user.findUnique({ where: { id: token.id as string } });
         if (latestUser) {
           token.name = latestUser.name;
           token.image = latestUser.image;
@@ -239,5 +126,4 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-// Helper untuk mendapatkan sesi di server
 export const getAppSession = () => getServerSession(authOptions);

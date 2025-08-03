@@ -1,9 +1,9 @@
 "use client";
-import type { TemplateWithStats } from "@/types";
+import type { CourseWithStats } from "@/types"; // 1. Gunakan tipe yang benar
 import { Badge } from "@/components/ui/badge";
 import { Users, BookOpen } from "lucide-react";
 
-export function CourseHeader({ course }: { course: TemplateWithStats }) {
+export function CourseHeader({ course }: { course: CourseWithStats }) {
   return (
     <div className="bg-muted border-b">
       <div className="container mx-auto px-4 py-12">
@@ -12,10 +12,13 @@ export function CourseHeader({ course }: { course: TemplateWithStats }) {
         <p className="text-lg text-muted-foreground mt-4 max-w-3xl">
           {course.description}
         </p>
-        <div className="flex items-center gap-6 mt-6 text-sm">
+        <div className="flex flex-wrap items-center gap-6 mt-6 text-sm">
           <div className="flex items-center gap-2">
             <div className="font-semibold">Dibuat oleh:</div>
-            <div className="text-muted-foreground">{course.creator.name}</div>
+            {/* 2. Akses nama kreator dengan aman */}
+            <div className="text-muted-foreground">
+              {course.creator?.name || "Kreator Anonim"}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" />

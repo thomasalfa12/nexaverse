@@ -1,6 +1,5 @@
-// components/admin/verifiedUser/courses/details/PricingManager.tsx (Dioptimalkan)
-
 "use client";
+
 import { DollarSign, Loader2 } from "lucide-react";
 import {
   Card,
@@ -14,18 +13,24 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
-import type { Pricing } from "@/types";
-import { useUpdateCourse } from "@/hooks/useUpdateCourse"; // Hook baru kita
+import { useEffect, useState, useCallback } from "react";
+import type { CourseWithStats } from "@/types";
+import { useUpdateCourse } from "@/hooks/useUpdateCourse";
 import { isAddress } from "viem";
+import type { Pricing } from "@prisma/client";
+
+// FIX: Definisikan tipe lokal yang lebih spesifik untuk menyertakan paymentToken
+// Ini adalah cara yang aman untuk memberitahu TypeScript tentang properti tambahan.
+type PricingWithToken = Pricing & { paymentToken?: string | null };
 
 type PricingFormData = {
   price: string;
   paymentToken: string;
 };
 
-export function PricingManager({ courseId }: { courseId: string }) {
-  const [isLoading, setIsLoading] = useState(true);
+// Komponen ini sekarang membutuhkan seluruh objek 'course' untuk mendapatkan contractAddress
+export function PricingManager({ course }: { course: CourseWithStats }) {
+  const [isFetching, setIsFetching] = useState(true);
   const { isUpdating, updatePrice, updatePaymentToken } = useUpdateCourse();
 
   const {
@@ -35,16 +40,65 @@ export function PricingManager({ courseId }: { courseId: string }) {
     formState: { errors },
   } = useForm<PricingFormData>();
 
-  // Di aplikasi nyata, Anda akan mengambil data on-chain atau dari DB
+  // Fungsi untuk mengambil data harga dari DB dan mengisi form
+  const fetchAndSetPricing = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      const res = await fetch(`/api/admin/courses/${course.id}/pricing`);
+      if (res.ok) {
+        const data: PricingWithToken = await res.json();
+        setValue("price", data.price.toString() || "0");
+        // FIX: Gunakan tipe yang sudah didefinisikan, tidak perlu 'any'
+        setValue(
+          "paymentToken",
+          data.paymentToken || "0x0000000000000000000000000000000000000000"
+        );
+      }
+    } catch (error) {
+      console.error("Gagal mengambil data harga:", error);
+      setValue("price", "0");
+      setValue("paymentToken", "0x0000000000000000000000000000000000000000");
+    } finally {
+      setIsFetching(false);
+    }
+  }, [course.id, setValue]);
+
   useEffect(() => {
-    // Placeholder untuk mengambil data harga & token saat ini
-    // const fetchCurrentPricing = async () => { ... }
-    // fetchCurrentPricing();
-    setIsLoading(false);
-  }, [courseId, setValue]);
+    fetchAndSetPricing();
+  }, [fetchAndSetPricing]);
 
   const handlePriceSubmit = async (data: PricingFormData) => {
-    await updatePrice(courseId as `0x${string}`, data.price);
+    // Tampilkan notifikasi loading
+    const promise = () =>
+      new Promise<void>(async (resolve, reject) => {
+        try {
+          await updatePrice(
+            course.contractAddress as `0x${string}`,
+            data.price
+          );
+
+          const res = await fetch(`/api/admin/courses/${course.id}/pricing`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              price: data.price,
+              type: Number(data.price) > 0 ? "ONE_TIME" : "FREE",
+            }),
+          });
+
+          if (!res.ok) throw new Error("Gagal menyimpan harga ke database.");
+
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+    toast.promise(promise, {
+      loading: "Memperbarui harga on-chain...",
+      success: "Harga berhasil diperbarui!",
+      error: (err) => `Gagal: ${err.message}`,
+    });
   };
 
   const handleTokenSubmit = async (data: PricingFormData) => {
@@ -52,13 +106,37 @@ export function PricingManager({ courseId }: { courseId: string }) {
       toast.error("Alamat token tidak valid.");
       return;
     }
-    await updatePaymentToken(
-      courseId as `0x${string}`,
-      data.paymentToken as `0x${string}`
-    );
+
+    const promise = () =>
+      new Promise<void>(async (resolve, reject) => {
+        try {
+          await updatePaymentToken(
+            course.contractAddress as `0x${string}`,
+            data.paymentToken as `0x${string}`
+          );
+
+          const res = await fetch(`/api/admin/courses/${course.id}/pricing`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentToken: data.paymentToken }),
+          });
+
+          if (!res.ok) throw new Error("Gagal menyimpan token ke database.");
+
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+    toast.promise(promise, {
+      loading: "Memperbarui token on-chain...",
+      success: "Token pembayaran berhasil diubah!",
+      error: (err) => `Gagal: ${err.message}`,
+    });
   };
 
-  if (isLoading) {
+  if (isFetching) {
     return (
       <Card>
         <CardContent className="p-8 flex justify-center">
@@ -75,11 +153,11 @@ export function PricingManager({ courseId }: { courseId: string }) {
           <DollarSign /> Pengaturan Harga & Pembayaran
         </CardTitle>
         <CardDescription>
-          Kelola harga dan token pembayaran kursus Anda secara on-chain.
+          Kelola harga dan token pembayaran kursus Anda. Perubahan akan tercatat
+          on-chain dan di database.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
-        {/* Form untuk Update Harga */}
         <form onSubmit={handleSubmit(handlePriceSubmit)} className="space-y-3">
           <div>
             <Label htmlFor="price">Ubah Harga (dalam ETH/Token)</Label>
@@ -98,11 +176,10 @@ export function PricingManager({ courseId }: { courseId: string }) {
           </div>
           <Button type="submit" disabled={isUpdating}>
             {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Perbarui Harga
+            Perbarui Harga On-Chain
           </Button>
         </form>
 
-        {/* Form untuk Update Token Pembayaran */}
         <form
           onSubmit={handleSubmit(handleTokenSubmit)}
           className="space-y-3 border-t pt-6"
@@ -111,7 +188,7 @@ export function PricingManager({ courseId }: { courseId: string }) {
             <Label htmlFor="paymentToken">Ubah Token Pembayaran</Label>
             <Input
               id="paymentToken"
-              placeholder="0x... (isi 0x0...0 untuk ETH)"
+              placeholder="0x... (isi alamat 0 untuk ETH)"
               {...register("paymentToken", {
                 required: "Alamat token wajib diisi",
               })}
@@ -124,7 +201,7 @@ export function PricingManager({ courseId }: { courseId: string }) {
           </div>
           <Button type="submit" disabled={isUpdating}>
             {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Perbarui Token
+            Perbarui Token On-Chain
           </Button>
         </form>
       </CardContent>

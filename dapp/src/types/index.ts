@@ -1,39 +1,48 @@
-// src/types.ts (Sudah Diperbaiki)
-
 import type {
   Course as PrismaCourse,
-  Credential as PrismaCredential,
   CourseModule as PrismaModule,
   VerifiedEntity as PrismaVerifiedEntity,
   Pricing as PrismaPricing,
   Enrollment as PrismaEnrollment,
   EligibilityRecord as PrismaEligibilityRecord,
+  Credential as PrismaCredential,
+  ModuleText,
+  ModuleLiveSession,
+  ModuleAssignment,
+  ModuleQuiz,
 } from "@prisma/client";
 
-// --- Tipe Data Dasar ---
+// --- Tipe Data untuk Pengalaman Belajar ---
+export type FullModuleData = PrismaModule & {
+  textContent: ModuleText | null;
+  liveSession: ModuleLiveSession | null;
+  assignment: ModuleAssignment | null;
+  quiz: ModuleQuiz | null;
+};
+export type FullCourseData = PrismaCourse & {
+  creator: Pick<PrismaVerifiedEntity, "name" | "bio">;
+  pricing: PrismaPricing | null;
+  modules: FullModuleData[];
+};
+
+// --- Tipe Data untuk Dasbor & Komponen Lain ---
 export type CourseModule = PrismaModule;
 export type Pricing = PrismaPricing;
 export type VerifiedEntity = PrismaVerifiedEntity;
 
-// --- Tipe Data Gabungan (Composite Types) ---
-
-// FIX: Tipe baru untuk Course dengan relasi yang dibutuhkan oleh komponen.
-// Ini menggantikan `TemplateWithStats` yang lama.
 export type CourseWithStats = PrismaCourse & {
   _count: {
-    enrollments: number;
+    enrollments?: number;
   };
-  creator: Pick<VerifiedEntity, "name" | "bio">;
+  creator: Pick<VerifiedEntity, "name">;
   pricing: Pricing | null;
-  modules: Pick<PrismaModule, 'id'>[];
+  // FIX: Ambil semua field yang dibutuhkan oleh CourseCurriculum
+  modules: Pick<PrismaModule, 'id' | 'title' | 'type' | 'stepNumber'>[];
 };
 
-// FIX: Tipe Enrollment yang sekarang berelasi dengan Course, bukan CredentialTemplate.
 export interface EnrollmentWithCourse extends PrismaEnrollment {
   course: PrismaCourse;
 }
-
-// FIX: Tipe untuk kredensial yang bisa diklaim, sekarang berelasi dengan Credential.
 export interface ClaimableRecord extends PrismaEligibilityRecord {
   credential: PrismaCredential & {
     creator: Pick<VerifiedEntity, "name">;
