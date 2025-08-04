@@ -19,7 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import DarkModeToggle from "@/components/ui/DarkModeToggle";
+import DarkModeToggle from "@/components/ui/dark-mode-toggle";
 import { LogIn, Loader2, ShieldCheck, PenTool, Users } from "lucide-react";
 import { toast } from "sonner";
 
