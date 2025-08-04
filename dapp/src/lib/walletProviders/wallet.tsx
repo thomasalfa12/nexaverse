@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, ReactNode } from "react";
+import React, { useState, useEffect, ReactNode, useRef } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 import {
   RainbowKitProvider,
@@ -8,7 +8,7 @@ import {
   lightTheme,
   darkTheme,
 } from "@rainbow-me/rainbowkit";
-import { WagmiProvider, type State, useAccount } from "wagmi";
+import { WagmiProvider, type State, useAccount, type Config } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
@@ -16,47 +16,83 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "Nexaverse",
-  projectId: process.env.NEXT_PUBLIC_WCT_PROJECT_ID!,
-  chains: [baseSepolia],
-  ssr: true,
-});
+// --- Pola Singleton untuk Wagmi Config (Sudah Benar) ---
+let wagmiConfigInstance: Config | null = null;
+const getWagmiConfig = () => {
+  if (!wagmiConfigInstance) {
+    wagmiConfigInstance = getDefaultConfig({
+      appName: "Nexaverse",
+      projectId: process.env.NEXT_PUBLIC_WCT_PROJECT_ID!,
+      chains: [baseSepolia],
+      ssr: true,
+    });
+  }
+  return wagmiConfigInstance;
+};
+
+export const wagmiConfig = getWagmiConfig();
 
 const queryClient = new QueryClient();
 
+// --- WalletSessionManager yang Disempurnakan ---
+// Updated WalletSessionManager
 function WalletSessionManager() {
   const { data: session, status } = useSession();
   const { address: walletAddress, isConnected } = useAccount();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Cek hanya jika sesi NextAuth sudah terotentikasi dan wallet sudah terhubung
-    if (status === "authenticated" && isConnected && walletAddress) {
-      // Bandingkan alamat di sesi NextAuth dengan alamat aktif di wallet
-      if (session.user.address.toLowerCase() !== walletAddress.toLowerCase()) {
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    // Kondisi 1: Pastikan semua data sudah siap
+    if (
+      status !== "authenticated" ||
+      !isConnected ||
+      !walletAddress ||
+      !session?.user?.address
+    ) {
+      return;
+    }
+
+    // Kondisi 2: Periksa ketidakcocokan
+    const sessionAddress = session.user.address.toLowerCase();
+    const connectedAddress = walletAddress.toLowerCase();
+
+    if (sessionAddress !== connectedAddress) {
+      // Gunakan timeout untuk mencegah logout yang terlalu cepat saat ganti jaringan
+      timeoutRef.current = setTimeout(() => {
         console.warn(
-          "Ketidakcocokan alamat terdeteksi! Sesi lama sedang di-logout."
+          "Ketidakcocokan alamat terdeteksi! Sesi lama sedang di-logout.",
+          {
+            session: sessionAddress,
+            wallet: connectedAddress,
+          }
         );
-        toast.info("Akun wallet Anda telah berubah.", {
+
+        toast.warning("Akun Wallet Berubah", {
           description:
             "Sesi Anda telah diakhiri untuk keamanan. Silakan masuk kembali.",
         });
-        // Secara paksa logout sesi NextAuth yang lama
-        signOut({ redirect: true, callbackUrl: "/login" });
-      }
-    }
-  }, [status, isConnected, walletAddress, session]); // Jalankan efek ini setiap kali ada perubahan
 
-  return null; // Komponen ini tidak me-render UI apa pun
+        signOut({ redirect: true, callbackUrl: "/login" });
+      }, 1000); // Jeda 1 detik untuk stabilitas
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [status, isConnected, walletAddress, session?.user?.address]); // Dependency yang lebih spesifik
+
+  return null;
 }
 
-export function Web3Provider({
-  children,
-  initialState,
-}: {
-  children: ReactNode;
-  initialState?: State;
-}) {
+function ThemedRainbowKitProvider({ children }: { children: ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
   const { resolvedTheme } = useTheme();
 
@@ -69,21 +105,33 @@ export function Web3Provider({
   }
 
   return (
+    <RainbowKitProvider
+      theme={resolvedTheme === "dark" ? darkTheme() : lightTheme()}
+    >
+      {children}
+    </RainbowKitProvider>
+  );
+}
+
+export function Web3Provider({
+  children,
+  initialState,
+}: {
+  children: ReactNode;
+  initialState?: State;
+}) {
+  return (
     <WagmiProvider config={wagmiConfig} initialState={initialState}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={resolvedTheme === "dark" ? darkTheme() : lightTheme()}
-        >
+        <ThemedRainbowKitProvider>
           <WalletSessionManager />
           {children}
-        </RainbowKitProvider>
+        </ThemedRainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
 }
 
-// PERBAIKAN UTAMA: Buat komponen wrapper baru ini
-// Ini akan menjadi pembungkus terluar di file providers.tsx
 export function RootWeb3Provider({
   children,
   initialState,
@@ -98,7 +146,6 @@ export function RootWeb3Provider({
       enableSystem
       disableTransitionOnChange
     >
-      {/* Web3Provider sekarang berada DI DALAM ThemeProvider */}
       <Web3Provider initialState={initialState}>{children}</Web3Provider>
     </ThemeProvider>
   );

@@ -8,9 +8,6 @@ export async function GET(
   request: Request,
   { params }: { params: { courseId: string } }
 ) {
-  // FIX: Ekstrak courseId dari params di baris paling awal
-  const courseId = params.courseId;
-
   try {
     const session = await getAppSession();
     if (!session?.user?.id) {
@@ -21,7 +18,7 @@ export async function GET(
       where: {
         userId_courseId: {
           userId: session.user.id,
-          courseId: courseId, // Gunakan variabel courseId
+          courseId: params.courseId,
         }
       }
     });
@@ -30,9 +27,8 @@ export async function GET(
       return NextResponse.json({ error: "Anda belum terdaftar di kursus ini" }, { status: 403 });
     }
 
-    // Jika terdaftar, ambil semua data kursus dan konten modulnya
     const courseData = await prisma.course.findUnique({
-      where: { id: courseId }, // Gunakan variabel courseId
+      where: { id: params.courseId },
       include: {
         creator: { select: { name: true } },
         modules: {
@@ -42,6 +38,10 @@ export async function GET(
             liveSession: true,
             assignment: true,
             quiz: true,
+            // Sertakan data submission siswa untuk modul ini
+            submissions: {
+              where: { userId: session.user.id }
+            }
           }
         }
       }
@@ -50,11 +50,17 @@ export async function GET(
     if (!courseData) {
       return NextResponse.json({ error: "Kursus tidak ditemukan" }, { status: 404 });
     }
+    
+    // Gabungkan data pendaftaran (progres) dengan data kursus
+    const responseData = {
+      ...courseData,
+      enrollment,
+    };
 
-    return NextResponse.json(courseData);
+    return NextResponse.json(responseData);
 
   } catch (error) {
-    console.error(`[API LEARN ERROR] for course ${courseId}:`, error);
+    console.error(`[API LEARN ERROR] for course ${params.courseId}:`, error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

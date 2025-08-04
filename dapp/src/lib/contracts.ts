@@ -24,25 +24,48 @@ export const regAbi = isbtRegistryJson.abi;
 export const merkleClaimSbtFactoryAbi = merkleClaimSbtFactoryJson.abi;
 export const merkleClaimSbtAbi = merkleClaimSbtJson.abi;
 
-// --- LANGKAH 3: Ekspor objek 'contracts' yang HANYA berisi alamat ---
-// Ini membuat objek ini sangat ringan untuk diimpor.
+// --- LANGKAH 3: Ekspor objek 'contracts' yang berisi alamat DAN ABI ---
+// ✅ FIX: Tambahkan ABI ke setiap contract untuk kemudahan akses
 export const contracts = {
   nexaCourseFactory: {
     address: process.env.NEXT_PUBLIC_NEXA_COURSE_FACTORY_ADDRESS as `0x${string}`,
+    abi: nexaCourseFactoryAbi
+  },
+  nexaCourse: {
+    // ✅ TAMBAHAN: Contract individual NexaCourse dengan ABI
+    abi: nexaCourseAbi
   },
   courseFactory: {
     address: process.env.NEXT_PUBLIC_COURSE_FACTORY_ADDRESS as `0x${string}`,
+    abi: courseFactoryAbi
   },
   userSbtFactory: {
     address: process.env.NEXT_PUBLIC_USER_SBT_FACTORY_ADDRESS as `0x${string}`,
+    abi: userSbtFactoryAbi
   },
   merkleClaimSbtFactory: {
     address: process.env.NEXT_PUBLIC_MERKLE_SBT_FACTORY_ADDRESS as `0x${string}`,
+    abi: merkleClaimSbtFactoryAbi
   },
   verified: {
     address: process.env.NEXT_PUBLIC_VERIFIED_SBT_ADDRESS as `0x${string}`,
+    abi: verAbi
   },
   registry: {
     address: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS as `0x${string}`,
+    abi: regAbi
   },
+};
+
+// --- LANGKAH 4: Helper function untuk mendapatkan contract dengan address dan ABI ---
+export const getContractConfig = (contractAddress: `0x${string}`, contractType: 'nexaCourse' | 'courseFactory' | 'userSbtFactory') => {
+  const contract = contracts[contractType];
+  if (!contract?.abi) {
+    throw new Error(`ABI not found for contract type: ${contractType}`);
+  }
+  
+  return {
+    address: contractAddress,
+    abi: contract.abi
+  };
 };

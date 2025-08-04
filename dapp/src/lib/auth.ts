@@ -1,14 +1,13 @@
 // src/lib/auth.ts
 
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { getServerSession, type NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { SiweMessage } from "siwe";
-import { isEqual } from "lodash";
+import NextAuth from 'next-auth';
+import { PrismaAdapter } from '@auth/prisma-adapter';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { SiweMessage } from 'siwe';
+import { isEqual } from 'lodash';
 
-import { prisma } from "@/lib/server/prisma";
-// Impor helper spesialis kita
-import { getAndSyncOnchainData } from "@/lib/server/roles";
+import { prisma } from '@/lib/server/prisma';
+import { getAndSyncOnchainData } from '@/lib/server/roles';
 
 // Tipe data kustom untuk kejelasan
 type AuthorizeResult = {
@@ -21,51 +20,62 @@ type AuthorizeResult = {
   email: string | null;
 }
 
-export const authOptions: NextAuthOptions = {
+// Konfigurasi NextAuth v5
+export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "jwt" },
+  session: { 
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 24 jam
+    updateAge: 24 * 60 * 60, // Update session setiap 24 jam
+  },
+  jwt: {
+    maxAge: 24 * 60 * 60, // JWT berlaku 24 jam
+  },
   providers: [
     CredentialsProvider({
       name: "Ethereum",
       credentials: {
-        message: { label: "Message", type: "text" },
-        signature: { label: "Signature", type: "text" },
+        message: { type: "text" },
+        signature: { type: "text" },
       },
       async authorize(credentials): Promise<AuthorizeResult | null> {
         try {
-          const siwe = new SiweMessage(JSON.parse(credentials?.message || "{}"));
-          const result = await siwe.verify({ signature: credentials?.signature || "" });
+          if (typeof credentials?.message !== 'string' || typeof credentials?.signature !== 'string') {
+            throw new Error("Pesan atau tanda tangan tidak valid.");
+          }
+          
+          const siwe = new SiweMessage(JSON.parse(credentials.message));
+          const result = await siwe.verify({ signature: credentials.signature });
 
-          if (!result.success) throw new Error("Invalid signature.");
+          if (!result.success) throw new Error("Tanda tangan tidak valid.");
 
           const userAddress = result.data.address.toLowerCase();
           const chainId = result.data.chainId;
 
-          // Panggil helper spesialis kita
           const { roles: onchainRoles, entityId: onchainEntityId } = await getAndSyncOnchainData(userAddress as `0x${string}`, chainId);
 
-          // Logika sinkronisasi cerdas di dalam transaksi database
           const user = await prisma.$transaction(async (tx) => {
-            const existingUser = await tx.user.findUnique({
-              where: { walletAddress: userAddress },
-            });
-
+            const existingUser = await tx.user.findUnique({ where: { walletAddress: userAddress } });
             if (!existingUser) {
-              return tx.user.create({
-                data: { walletAddress: userAddress, roles: JSON.stringify(onchainRoles), entityId: onchainEntityId },
+              return tx.user.create({ 
+                data: { 
+                  walletAddress: userAddress, 
+                  roles: JSON.stringify(onchainRoles), 
+                  entityId: onchainEntityId 
+                } 
               });
             }
-
             const storedRoles = existingUser.roles ? JSON.parse(existingUser.roles) : [];
             const isDataStale = !isEqual(storedRoles.sort(), onchainRoles.sort()) || existingUser.entityId !== onchainEntityId;
-
             if (isDataStale) {
-              return tx.user.update({
-                where: { walletAddress: userAddress },
-                data: { roles: JSON.stringify(onchainRoles), entityId: onchainEntityId },
+              return tx.user.update({ 
+                where: { walletAddress: userAddress }, 
+                data: { 
+                  roles: JSON.stringify(onchainRoles), 
+                  entityId: onchainEntityId 
+                } 
               });
             }
-            
             return existingUser;
           });
 
@@ -86,7 +96,8 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger }) {
+      // Saat pertama kali sign-in
       if (user) {
         const customUser = user as AuthorizeResult;
         token.id = customUser.id;
@@ -96,34 +107,63 @@ export const authOptions: NextAuthOptions = {
         token.name = customUser.name;
         token.image = customUser.image;
         token.email = customUser.email;
+        return token;
       }
-      if (trigger === "update" && session) {
-        const latestUser = await prisma.user.findUnique({ where: { id: token.id as string } });
-        if (latestUser) {
-          token.name = latestUser.name;
-          token.image = latestUser.image;
-          token.email = latestUser.email;
+
+      // HANYA ambil data terbaru saat trigger update (bukan setiap session check)
+      if (trigger === "update" && token.id) {
+        try {
+          const latestUser = await prisma.user.findUnique({ 
+            where: { id: token.id as string },
+            select: {
+              name: true,
+              image: true,
+              email: true,
+            }
+          });
+          if (latestUser) {
+            token.name = latestUser.name;
+            token.image = latestUser.image;
+            token.email = latestUser.email;
+          }
+        } catch (error) {
+          console.error("Error fetching user data in JWT callback:", error);
+          // Jangan throw error, return token yang ada
         }
       }
+      
       return token;
     },
-    session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.address = token.walletAddress as string;
-        session.user.roles = token.roles as string[];
-        session.user.entityId = token.entityId as number | null;
-        session.user.name = token.name as string | null;
-        session.user.image = token.image as string | null;
-        session.user.email = token.email as string | null;
-        session.user.profileComplete = !!token.name;
+    async session({ session, token }) {
+      if (session.user && token.id) {
+        try {
+          // Menggunakan Object.assign untuk menghindari type error
+          Object.assign(session.user, {
+            id: token.id,
+            address: token.walletAddress || '',
+            roles: token.roles || [],
+            entityId: token.entityId || null,
+            name: token.name || null,
+            image: token.image || null,
+            email: token.email || null,
+            profileComplete: !!token.name,
+          });
+        } catch (error) {
+          console.error("Error in session callback:", error);
+        }
       }
       return session;
     },
   },
   pages: {
-    signIn: "/login",
+    signIn: '/login',
   },
-};
+  // Matikan debug sepenuhnya
+  debug: false,
+});
 
-export const getAppSession = () => getServerSession(authOptions);
+// Export handlers untuk API routes
+export const { GET, POST } = handlers;
+
+// Jembatan kompatibilitas
+export const getAppSession = auth;

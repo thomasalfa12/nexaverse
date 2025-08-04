@@ -134,13 +134,21 @@ model VerifiedEntity {
 
 // Proses klaim lencana terverifikasi untuk sebuah entitas
 model VerifiedSbtClaimProcess {
-  id       String                 @id @default(cuid())
-  entityId Int                    @unique
-  entity   VerifiedEntity         @relation(fields: [entityId], references: [id])
-  status   VerifiedSbtClaimStatus @default(NOT_REQUESTED)
-  cid      String?
-  tokenId  Int?                   @unique
-  // ... field lainnya
+  id             String                 @id @default(cuid())
+  entityId       Int                    @unique
+  entity         VerifiedEntity         @relation(fields: [entityId], references: [id])
+  status         VerifiedSbtClaimStatus @default(NOT_REQUESTED)
+  cid            String?
+  tokenId        Int?                   @unique
+  requestTxHash  String?
+  approvalTxHash String?
+  claimTxHash    String?
+  approvedAt     DateTime?
+  claimedAt      DateTime?
+  // --- AKHIR DARI PENAMBAHAN ---
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- MODEL COURSE & KONTENNYA (HASIL REFRACTOR) ---

@@ -11,7 +11,7 @@ import { Loader2, CheckCircle } from "lucide-react";
 import { useEnroll } from "@/hooks/useEnroll";
 import type { Pricing } from "@prisma/client";
 
-// FIX: Definisikan tipe lokal yang lebih spesifik untuk menyertakan paymentToken
+// Definisikan tipe lokal yang lebih spesifik untuk menyertakan paymentToken
 type PricingWithToken = Pricing & { paymentToken?: string | null };
 
 const toGatewayURL = (ipfsUri: string | null | undefined): string => {
@@ -40,7 +40,6 @@ export function PricingBox({
     : "0";
   const isFree = !course.pricing || Number(priceInEth) === 0;
 
-  // FIX: Hapus 'hash' yang tidak terpakai
   const { enroll, status: enrollStatus, isSuccess } = useEnroll();
 
   useEffect(() => {
@@ -66,7 +65,6 @@ export function PricingBox({
       return;
     }
 
-    // FIX: Gunakan type assertion yang aman, bukan 'any'
     const paymentToken = (course.pricing as PricingWithToken)?.paymentToken;
 
     enroll({
@@ -75,6 +73,10 @@ export function PricingBox({
       price: priceInEth,
       paymentToken: paymentToken ? (paymentToken as `0x${string}`) : undefined,
     });
+  };
+
+  const handleLearnClick = () => {
+    router.push(`/dashboard/courses/${course.id}/learn`);
   };
 
   const getButtonState = () => {
@@ -97,8 +99,6 @@ export function PricingBox({
 
   const buttonState = getButtonState();
   const showEnrolledState = isEnrolled || isSuccess;
-
-  // FIX: Gunakan type assertion yang aman di sini juga
   const pricingData = course.pricing as PricingWithToken | null;
 
   return (
@@ -129,7 +129,7 @@ export function PricingBox({
 
         {showEnrolledState ? (
           <Button
-            onClick={() => router.push(`/dashboard/courses/${course.id}/learn`)}
+            onClick={handleLearnClick}
             className="w-full h-12 text-lg mt-4"
           >
             <CheckCircle className="mr-2 h-5 w-5" />

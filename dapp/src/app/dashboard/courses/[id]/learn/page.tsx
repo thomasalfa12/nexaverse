@@ -1,86 +1,78 @@
-"use client";
+// File: app/dashboard/course/[id]/learn/page.tsx (REVISI LENGKAP)
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
-// Tipe baru kita sekarang sudah benar
-import type { FullCourseData, FullModuleData } from "@/types";
-import { LearningSidebar } from "@/components/learning/LearningSidebar";
-import { ContentView } from "@/components/learning/ContentView";
+import { notFound } from "next/navigation";
+import { getAppSession } from "@/lib/auth";
+import { prisma } from "@/lib/server/prisma"; // <-- Path prisma yang benar
+import { LearningViewClient } from "@/components/learning/LearningViewClient";
+import type { FullCourseLearningData } from "@/types";
 
-export default function LearningPage() {
-  const params = useParams();
-  const courseId = params.id as string;
+// Fungsi data-fetching yang dijalankan di server
+async function getLearningData(
+  courseId: string,
+  userId: string
+): Promise<FullCourseLearningData | null> {
+  // 1. Validasi pendaftaran terlebih dahulu, sama seperti API Anda
+  const enrollment = await prisma.enrollment.findUnique({
+    where: {
+      userId_courseId: { userId: userId, courseId: courseId },
+    },
+  });
 
-  const [courseData, setCourseData] = useState<FullCourseData | null>(null);
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!courseId) return;
-
-    const fetchCourseData = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/learn/courses/${courseId}`);
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "Gagal memuat data kursus.");
-        }
-
-        const data: FullCourseData = await res.json();
-        setCourseData(data);
-
-        if (data.modules && data.modules.length > 0) {
-          setActiveModuleId(data.modules[0].id);
-        }
-      } catch (error) {
-        toast.error("Gagal Memuat Kursus", {
-          description: (error as Error).message,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCourseData();
-  }, [courseId]);
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col justify-center items-center h-full gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-muted-foreground">
-          Mempersiapkan Ruang Belajar Anda...
-        </p>
-      </div>
-    );
+  if (!enrollment) {
+    return null; // User tidak terdaftar
   }
+
+  // 2. Jika terdaftar, fetch semua data kursus yang relevan
+  const courseData = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: {
+      creator: { select: { name: true } },
+      modules: {
+        orderBy: { stepNumber: "asc" },
+        include: {
+          textContent: true,
+          videoContent: true, // <-- Jangan lupa video
+          liveSession: true,
+          assignment: true,
+          quiz: true,
+          submissions: {
+            // <-- Fetch submission dari user yang sedang login
+            where: { userId: userId },
+          },
+        },
+      },
+    },
+  });
 
   if (!courseData) {
-    return (
-      <div className="text-center h-full flex items-center justify-center">
-        <p>Kursus tidak dapat ditemukan.</p>
-      </div>
-    );
+    return null; // Kursus tidak ditemukan
   }
 
-  // FIX: Beri tipe yang benar pada parameter 'm'
-  const activeModule = courseData.modules.find(
-    (m: FullModuleData) => m.id === activeModuleId
-  );
+  // 3. Gabungkan data kursus dengan data pendaftaran menjadi satu objek
+  return {
+    ...courseData,
+    enrollment,
+  };
+}
 
-  return (
-    <div className="flex h-full">
-      <LearningSidebar
-        course={courseData}
-        activeModuleId={activeModuleId}
-        onSelectModule={setActiveModuleId}
-      />
-      <main className="flex-1 overflow-y-auto">
-        {activeModule && <ContentView module={activeModule} />}
-      </main>
-    </div>
-  );
+export default async function LearningPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const session = await getAppSession();
+
+  if (!session?.user?.id) {
+    return notFound();
+  }
+
+  const learningData = await getLearningData(params.id, session.user.id);
+
+  if (!learningData) {
+    // Jika data null (user tidak terdaftar atau kursus tidak ada)
+    return notFound();
+  }
+
+  // Serahkan data lengkap ke komponen client
+  return <LearningViewClient initialData={learningData} />;
 }

@@ -1,17 +1,9 @@
-// types/next-auth.d.ts (Sudah Diperbaiki)
+// types/next-auth.d.ts
 
-import type { DefaultSession, DefaultUser } from "next-auth";
-import type { JWT as DefaultJWT } from "next-auth/jwt";
-
-// Tipe User dari authorize callback (tidak perlu diubah)
-interface User extends DefaultUser {
-  walletAddress: string;
-  roles: string[];
-  entityId: number | null;
-}
+import { DefaultSession, DefaultUser } from "next-auth";
+import { DefaultJWT } from "next-auth/jwt";
 
 declare module "next-auth" {
-  // Tipe untuk sesi di sisi klien (tidak perlu diubah)
   interface Session {
     user: {
       id: string;
@@ -19,20 +11,29 @@ declare module "next-auth" {
       roles: string[];
       entityId: number | null;
       profileComplete: boolean;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
     } & DefaultSession["user"];
   }
-}
 
-declare module "next-auth/jwt" {
-  // FIX: Lengkapi tipe JWT dengan semua properti yang kita tambahkan
-  interface JWT extends DefaultJWT {
+  interface User extends DefaultUser {
     id: string;
     walletAddress: string;
     roles: string[];
     entityId: number | null;
-    profileComplete: boolean;
-    // 'name' sudah ada di DefaultJWT
-    image?: string | null;
+    name?: string | null;
     email?: string | null;
+    image?: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT extends DefaultJWT {
+    id?: string;
+    walletAddress?: string;
+    roles?: string[];
+    entityId?: number | null;
+    profileComplete?: boolean;
   }
 }

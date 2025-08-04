@@ -1,5 +1,3 @@
-// src/components/auth/ProfileSetupProvider.tsx (Sudah Benar ✅)
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,26 +11,39 @@ export function ProfileSetupProvider({
 }) {
   const { data: session, status, update } = useSession();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [setupJustCompleted, setSetupJustCompleted] = useState(false);
 
   useEffect(() => {
-    // Logika ini sekarang akan berjalan dengan benar
+    // Logika sederhana: tampilkan modal jika profil belum lengkap.
     if (
-      !setupJustCompleted &&
       status === "authenticated" &&
-      session.user?.profileComplete === false
+      session?.user?.profileComplete === false
     ) {
       setIsModalOpen(true);
     } else {
       setIsModalOpen(false);
     }
-  }, [session, status, setupJustCompleted]);
+  }, [session, status]);
 
+  // Fix: Buat function async untuk memenuhi tipe yang diharapkan
   const handleFinishSetup = async () => {
-    setSetupJustCompleted(true);
-    setIsModalOpen(false);
-    // `update()` akan memicu callback di `lib/auth.ts` untuk menyegarkan sesi
-    await update();
+    console.log("PROVIDER: 🔄 Memulai proses update session...");
+
+    try {
+      // Trigger session update untuk mendapatkan data terbaru
+      console.log("PROVIDER: 📡 Memanggil session.update()...");
+      await update();
+
+      console.log("PROVIDER: ✅ Session berhasil diupdate");
+
+      // Tutup modal
+      setIsModalOpen(false);
+
+      console.log("PROVIDER: 🎉 Modal ditutup, setup selesai");
+    } catch (error) {
+      console.error("PROVIDER: ❌ Error saat update session:", error);
+      // Tetap tutup modal meskipun ada error
+      setIsModalOpen(false);
+    }
   };
 
   return (

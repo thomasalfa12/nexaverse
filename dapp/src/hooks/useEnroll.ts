@@ -4,7 +4,7 @@ import { useWriteContract, useAccount, useConfig, useWaitForTransactionReceipt }
 import { readContract } from "wagmi/actions";
 import { parseEther, BaseError, ContractFunctionRevertedError } from "viem";
 import { toast } from "sonner";
-import { contracts } from "@/lib/contracts";
+import { nexaCourseAbi } from "@/lib/contracts"; // ✅ Import ABI langsung
 import { useState, useEffect, useCallback } from "react";
 
 type EnrollArgs = {
@@ -21,23 +21,23 @@ export function useEnroll() {
   const wagmiConfig = useConfig();
   const [status, setStatus] = useState<EnrollmentStatus>('idle');
   const [currentCourseId, setCurrentCourseId] = useState<string>('');
-  
-  const { 
-    data: hash, 
+
+  const {
+    data: hash,
     isPending: isWritePending,
     writeContractAsync,
     reset: resetWrite
   } = useWriteContract();
 
-  const { 
-    isLoading: isConfirming, 
+  const {
+    isLoading: isConfirming,
     isSuccess: isConfirmed,
-    isError: isConfirmError 
+    isError: isConfirmError
   } = useWaitForTransactionReceipt({ hash });
 
   const syncEnrollmentData = useCallback(async (courseId: string, maxRetries = 3) => {
     setStatus('syncing');
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await fetch(`/api/courses/${courseId}/sync-enrollment`, {
@@ -49,21 +49,21 @@ export function useEnroll() {
           const result = await response.json();
           setStatus('success');
           toast.success("Pendaftaran berhasil dan data telah disinkronkan!");
-          
+
           // Trigger global event untuk update UI
-          window.dispatchEvent(new CustomEvent('enrollmentSynced', { 
-            detail: { courseId, result } 
+          window.dispatchEvent(new CustomEvent('enrollmentSynced', {
+            detail: { courseId, result }
           }));
-          
+
           setTimeout(() => window.location.reload(), 2000);
           return true;
         }
-        
+
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(`Sync failed: ${errorData.error || response.status}`);
       } catch (error) {
         console.error(`Sync attempt ${attempt} failed:`, error);
-        
+
         if (attempt === maxRetries) {
           setStatus('error');
           toast.error("Gagal sinkronisasi data", {
@@ -72,7 +72,7 @@ export function useEnroll() {
           });
           return false;
         }
-        
+
         // Exponential backoff dengan jitter
         const delay = 1000 * Math.pow(2, attempt) + Math.random() * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -99,9 +99,10 @@ export function useEnroll() {
   const checkOnChainEnrollment = async (contractAddress: `0x${string}`) => {
     if (!userAddress) return false;
     try {
+      // ✅ FIX: Gunakan ABI yang benar
       const isEnrolled = await readContract(wagmiConfig, {
         address: contractAddress,
-        abi: contracts.nexaCourse.abi,
+        abi: nexaCourseAbi, // ✅ Gunakan ABI langsung
         functionName: 'isEnrolled',
         args: [userAddress],
       });
@@ -122,7 +123,7 @@ export function useEnroll() {
       resetWrite();
       setCurrentCourseId(courseId);
       setStatus('checking');
-      
+
       const loadingToast = toast.loading("Memeriksa status pendaftaran on-chain...");
 
       // Pengecekan proaktif
@@ -138,7 +139,7 @@ export function useEnroll() {
 
       toast.dismiss(loadingToast);
       setStatus('enrolling');
-      
+
       const isEthPayment = !paymentToken || paymentToken === "0x0000000000000000000000000000000000000000";
       const priceInWei = parseEther(price);
 
@@ -148,26 +149,26 @@ export function useEnroll() {
         toast.info("Meminta persetujuan token...");
       }
 
+      // ✅ FIX: Gunakan ABI yang benar
       await writeContractAsync({
         address: contractAddress,
-        abi: contracts.nexaCourse.abi,
+        abi: nexaCourseAbi, // ✅ Gunakan ABI langsung
         functionName: isEthPayment ? 'enrollWithETH' : 'enrollWithToken',
         ...(isEthPayment && { value: priceInWei }),
       });
-      
+
       setStatus('confirming');
       toast.info("Transaksi dikirim, menunggu konfirmasi blockchain...");
 
     } catch (error: unknown) {
       console.error("Enrollment error:", error);
       setStatus('error');
-      
+
       // Enhanced error handling
       if (error instanceof BaseError) {
         const revertError = error.walk(err => err instanceof ContractFunctionRevertedError);
-        
+
         if (revertError instanceof ContractFunctionRevertedError) {
-          // FIX: Gunakan shortMessage daripada errorName untuk kompatibilitas
           const errorMessage = revertError.shortMessage;
 
           if (errorMessage.includes("AlreadyEnrolled")) {
@@ -177,24 +178,24 @@ export function useEnroll() {
             await syncEnrollmentData(courseId);
             return;
           } else if (errorMessage.includes("CourseInactive")) {
-            toast.error("Kursus Tidak Aktif", { 
-              description: "Pendaftaran untuk kursus ini sedang ditutup." 
+            toast.error("Kursus Tidak Aktif", {
+              description: "Pendaftaran untuk kursus ini sedang ditutup."
             });
             return;
           } else if (errorMessage.includes("InsufficientPayment")) {
-            toast.error("Pembayaran Tidak Cukup", { 
-              description: `Diperlukan ${price} ETH untuk mendaftar.` 
+            toast.error("Pembayaran Tidak Cukup", {
+              description: `Diperlukan ${price} ETH untuk mendaftar.`
             });
             return;
           } else if (errorMessage.includes("WrongPaymentMethod")) {
-            toast.error("Metode Pembayaran Salah", { 
-              description: "Gunakan metode pembayaran yang sesuai untuk kursus ini." 
+            toast.error("Metode Pembayaran Salah", {
+              description: "Gunakan metode pembayaran yang sesuai untuk kursus ini."
             });
             return;
           }
         }
       }
-      
+
       // Handle user rejection dan error umum
       const errorMessage = (error as Error).message;
       if (errorMessage.includes("User rejected") || errorMessage.includes("user rejected")) {

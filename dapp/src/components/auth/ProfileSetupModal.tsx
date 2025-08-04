@@ -259,23 +259,49 @@ export function ProfileSetupModal({
 
   const watchedName = watch("name", "Creator Digital");
 
+  // Add this at the end of your ProfileSetupModal component, in the onFormSubmit function:
+
+  // Di ProfileSetupModal.tsx, ganti function onFormSubmit dengan yang ini:
+
+  // Di ProfileSetupModal.tsx, ganti onFormSubmit dengan ini:
+
   const onFormSubmit = (data: ProfileFormData) => {
     const formData = new FormData();
     formData.append("name", data.name);
     if (data.image) formData.append("image", data.image);
     if (data.email) formData.append("email", data.email);
 
+    console.log("MODAL: 📤 Mengirim data profil:", data);
+
     startTransition(async () => {
-      const result = await createOrUpdateProfileAction(formData);
-      if (result.success) {
-        toast.success("Selamat Datang di Nexaverse!");
-        await onFinished();
-      } else {
-        toast.error("Gagal menyimpan profil", { description: result.error });
+      try {
+        console.log("MODAL: 💾 Memanggil createOrUpdateProfileAction...");
+        const result = await createOrUpdateProfileAction(formData);
+
+        console.log("MODAL: 📋 Result dari profileAction:", result);
+
+        if (result.success) {
+          console.log("MODAL: ✅ Profil berhasil disimpan ke database");
+          toast.success("Selamat Datang di Nexaverse!");
+
+          console.log("MODAL: 🚀 Memanggil onFinished untuk update session...");
+          // Langsung panggil onFinished - let provider handle session update
+          await onFinished();
+
+          console.log("MODAL: 🎉 Proses setup profil selesai");
+        } else {
+          console.error("MODAL: ❌ Gagal menyimpan profil:", result.error);
+          toast.error("Gagal menyimpan profil", { description: result.error });
+        }
+      } catch (error) {
+        console.error(
+          "MODAL: ❌ Error tidak terduga saat submit profil:",
+          error
+        );
+        toast.error("Terjadi kesalahan yang tidak terduga");
       }
     });
   };
-
   const nextStep = async () => {
     let fieldsToValidate: (keyof ProfileFormData)[] = [];
     if (step === 2) {

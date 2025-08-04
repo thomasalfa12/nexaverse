@@ -20,8 +20,13 @@ type Question = {
   correctAnswerIndex: number;
 };
 
-export function QuizModuleView({ module }: { module: FullModuleData }) {
-  // FIX: Hapus `setQuestions` yang tidak terpakai
+export function QuizModuleView({
+  module,
+  onQuizCompleted,
+}: {
+  module: FullModuleData;
+  onQuizCompleted: () => void;
+}) {
   const [questions] = useState((module.quiz?.questions as Question[]) || []);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -65,8 +70,8 @@ export function QuizModuleView({ module }: { module: FullModuleData }) {
               Anda menjawab dengan benar {score} dari {questions.length}{" "}
               pertanyaan.
             </p>
-            <Button onClick={() => window.location.reload()}>
-              Ulangi Kuis
+            <Button onClick={onQuizCompleted} size="lg">
+              Lanjutkan ke Modul Berikutnya
             </Button>
           </CardContent>
         </Card>

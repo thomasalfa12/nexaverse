@@ -4,11 +4,11 @@ import { CourseStatus } from "@prisma/client";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ courseId: string }> } // Ubah ke Promise
+  { params }: { params: { courseId: string } } // ✅ FIX: Hapus Promise wrapper - gunakan versi yang kompatibel
 ) {
   try {
-    const { courseId } = await params; // Await params dulu
-    
+    const courseId = params.courseId; // ✅ Langsung akses tanpa await
+
     console.log("[DEBUG] Mencari kursus dengan ID:", courseId);
 
     if (!courseId) {
@@ -23,21 +23,21 @@ export async function GET(
     console.log("[DEBUG] Kursus ditemukan:", courseExists);
 
     if (!courseExists) {
-      return NextResponse.json({ 
-        error: "Kursus dengan ID tersebut tidak ditemukan di database" 
+      return NextResponse.json({
+        error: "Kursus dengan ID tersebut tidak ditemukan di database"
       }, { status: 404 });
     }
 
     if (courseExists.status !== CourseStatus.PUBLISHED) {
-      return NextResponse.json({ 
-        error: `Kursus "${courseExists.title}" belum dipublikasikan (status: ${courseExists.status})` 
+      return NextResponse.json({
+        error: `Kursus "${courseExists.title}" belum dipublikasikan (status: ${courseExists.status})`
       }, { status: 403 });
     }
 
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       include: {
-        modules: { 
+        modules: {
           orderBy: { stepNumber: 'asc' },
           select: {
             id: true,
@@ -46,11 +46,11 @@ export async function GET(
             stepNumber: true,
           }
         },
-        creator: { 
-          select: { 
-            name: true, 
-            bio: true 
-          } 
+        creator: {
+          select: {
+            name: true,
+            bio: true
+          }
         },
         pricing: true,
       },
@@ -59,7 +59,7 @@ export async function GET(
     return NextResponse.json(course);
   } catch (error) {
     console.error(`[API ERROR] Gagal mengambil kursus:`, error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: "Internal Server Error",
       details: error instanceof Error ? error.message : "Unknown error"
     }, { status: 500 });
