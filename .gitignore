@@ -25,7 +25,6 @@ out/
 
 # --- Konfigurasi Hardhat ---
 # Folder build, cache, dan typechain dari Hardhat
-artifacts/
 cache/
 typechain-types/
 
@@ -37,13 +36,6 @@ coverage.json
 # Folder data dari database lokal (misalnya, dari Docker)
 mysql-data/
 
-# File deployment yang berisi alamat kontrak.
-# Terkadang ini diabaikan, tetapi untuk proyek ini, kita akan menyimpannya
-# agar frontend tahu alamat kontrak yang benar. Jika Anda memiliki
-# alur kerja CI/CD yang lebih canggih, Anda mungkin ingin mengabaikannya.
-# deployments.json
-# userSbtDeployments.json
 
-# --- Konfigurasi Sistem Operasi ---
 .DS_Store
 Thumbs.db
