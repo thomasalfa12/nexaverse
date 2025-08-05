@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { ProfileSetupModal } from "./ProfileSetupModal";
 
+// Definisikan tipe data yang akan diterima dari modal
+type ProfileUpdatePayload = {
+  name?: string;
+  image?: string | null;
+  email?: string | null;
+};
+
 export function ProfileSetupProvider({
   children,
 }: {
@@ -13,7 +20,6 @@ export function ProfileSetupProvider({
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    // Logika sederhana: tampilkan modal jika profil belum lengkap.
     if (
       status === "authenticated" &&
       session?.user?.profileComplete === false
@@ -24,18 +30,32 @@ export function ProfileSetupProvider({
     }
   }, [session, status]);
 
-  // Fix: Buat function async untuk memenuhi tipe yang diharapkan
-  const handleFinishSetup = async () => {
-    console.log("PROVIDER: 🔄 Memulai proses update session...");
+  /**
+   * REFACTOR FINAL: Fungsi ini sekarang menerima 'data' dari modal
+   * dan meneruskannya ke fungsi update() dari Next-Auth.
+   * Ini adalah metode "update optimistik" yang andal.
+   */
+  const handleFinishSetup = async (data: ProfileUpdatePayload) => {
+    // Jika tidak ada nama, berarti modal ditutup tanpa submit, jangan lakukan apa-apa
+    if (!data.name) {
+      // Anda bisa mempertimbangkan untuk menutup modal di sini jika diperlukan,
+      // tetapi logika useEffect sudah menanganinya.
+      return;
+    }
+
+    console.log(
+      "PROVIDER: 🔄 Memulai proses update OPTIMISTIK dengan data:",
+      data
+    );
 
     try {
-      // Trigger session update untuk mendapatkan data terbaru
-      console.log("PROVIDER: 📡 Memanggil session.update()...");
-      await update();
+      // Panggil update() DENGAN data baru.
+      // Ini akan langsung memperbarui sesi di client tanpa perlu refetch.
+      await update(data);
 
-      console.log("PROVIDER: ✅ Session berhasil diupdate");
+      console.log("PROVIDER: ✅ Session berhasil diupdate secara optimistik");
 
-      // Tutup modal
+      // Menutup modal sekarang aman karena sesi di client sudah diperbarui
       setIsModalOpen(false);
 
       console.log("PROVIDER: 🎉 Modal ditutup, setup selesai");

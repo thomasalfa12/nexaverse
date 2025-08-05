@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, ReactNode, useRef } from "react";
+import React, { useState, useEffect, ReactNode } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 import {
   RainbowKitProvider,
@@ -12,11 +12,10 @@ import { WagmiProvider, type State, useAccount, type Config } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
 
-// --- Pola Singleton untuk Wagmi Config (Sudah Benar) ---
+// --- Singleton Pattern untuk Wagmi Config ---
 let wagmiConfigInstance: Config | null = null;
 const getWagmiConfig = () => {
   if (!wagmiConfigInstance) {
@@ -32,67 +31,68 @@ const getWagmiConfig = () => {
 
 export const wagmiConfig = getWagmiConfig();
 
-const queryClient = new QueryClient();
+// --- Singleton Pattern untuk QueryClient ---
+let queryClientInstance: QueryClient | null = null;
+const getQueryClient = () => {
+  if (!queryClientInstance) {
+    queryClientInstance = new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: 1000 * 60 * 5, // 5 minutes
+          gcTime: 1000 * 60 * 10, // 10 minutes
+        },
+      },
+    });
+  }
+  return queryClientInstance;
+};
 
-// --- WalletSessionManager yang Disempurnakan ---
-// Updated WalletSessionManager
+export const queryClient = getQueryClient();
+
+// --- WalletSessionManager ---
 function WalletSessionManager() {
   const { data: session, status } = useSession();
   const { address: walletAddress, isConnected } = useAccount();
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
-    // Clear existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-
-    // Kondisi 1: Pastikan semua data sudah siap
     if (
-      status !== "authenticated" ||
+      status === "loading" ||
+      isValidating ||
       !isConnected ||
-      !walletAddress ||
-      !session?.user?.address
+      !walletAddress
     ) {
       return;
     }
 
-    // Kondisi 2: Periksa ketidakcocokan
-    const sessionAddress = session.user.address.toLowerCase();
-    const connectedAddress = walletAddress.toLowerCase();
-
-    if (sessionAddress !== connectedAddress) {
-      // Gunakan timeout untuk mencegah logout yang terlalu cepat saat ganti jaringan
-      timeoutRef.current = setTimeout(() => {
-        console.warn(
-          "Ketidakcocokan alamat terdeteksi! Sesi lama sedang di-logout.",
-          {
-            session: sessionAddress,
-            wallet: connectedAddress,
-          }
-        );
-
+    if (
+      status === "authenticated" &&
+      session?.user?.address &&
+      session.user.address.toLowerCase() !== walletAddress.toLowerCase()
+    ) {
+      setIsValidating(true);
+      const timeoutId = setTimeout(() => {
         toast.warning("Akun Wallet Berubah", {
           description:
-            "Sesi Anda telah diakhiri untuk keamanan. Silakan masuk kembali.",
+            "Sesi Anda akan diakhiri untuk keamanan. Silakan masuk kembali.",
         });
-
         signOut({ redirect: true, callbackUrl: "/login" });
-      }, 1000); // Jeda 1 detik untuk stabilitas
+      }, 1000);
+      return () => clearTimeout(timeoutId);
     }
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [status, isConnected, walletAddress, session?.user?.address]); // Dependency yang lebih spesifik
+  }, [
+    status,
+    isConnected,
+    walletAddress,
+    session?.user?.address,
+    isValidating,
+  ]);
 
   return null;
 }
 
-function ThemedRainbowKitProvider({ children }: { children: ReactNode }) {
+// --- Client-Side RainbowKit Provider ---
+function ClientOnlyRainbowKit({ children }: { children: ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
   const { resolvedTheme } = useTheme();
 
@@ -101,7 +101,7 @@ function ThemedRainbowKitProvider({ children }: { children: ReactNode }) {
   }, []);
 
   if (!isMounted) {
-    return null;
+    return <>{children}</>;
   }
 
   return (
@@ -113,6 +113,7 @@ function ThemedRainbowKitProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// --- Web3Provider yang Bersih (Tanpa ThemeProvider) ---
 export function Web3Provider({
   children,
   initialState,
@@ -123,30 +124,11 @@ export function Web3Provider({
   return (
     <WagmiProvider config={wagmiConfig} initialState={initialState}>
       <QueryClientProvider client={queryClient}>
-        <ThemedRainbowKitProvider>
+        <ClientOnlyRainbowKit>
           <WalletSessionManager />
           {children}
-        </ThemedRainbowKitProvider>
+        </ClientOnlyRainbowKit>
       </QueryClientProvider>
     </WagmiProvider>
-  );
-}
-
-export function RootWeb3Provider({
-  children,
-  initialState,
-}: {
-  children: ReactNode;
-  initialState?: State;
-}) {
-  return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <Web3Provider initialState={initialState}>{children}</Web3Provider>
-    </ThemeProvider>
   );
 }

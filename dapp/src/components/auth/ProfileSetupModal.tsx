@@ -1,3 +1,6 @@
+// FILE: ProfileSetupModal.tsx
+// VERSI REFACTOR PENUH
+
 "use client";
 
 import { useState, useTransition } from "react";
@@ -34,7 +37,7 @@ import {
 import { createOrUpdateProfileAction } from "@/lib/server/actions/profileAction";
 import { cn } from "@/lib/utils";
 
-// Skema validasi tidak berubah
+// Skema validasi tidak diubah, sudah bagus.
 const profileSchema = z.object({
   image: z.string().url("URL gambar tidak valid.").optional(),
   name: z.string().min(3, "Nama Tampilan minimal 3 karakter.").trim(),
@@ -47,7 +50,14 @@ const profileSchema = z.object({
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
-// Tipe props untuk komponen Step
+// Tipe data untuk dikirim ke onFinished (untuk update optimistik)
+type ProfileUpdateData = {
+  name: string;
+  image?: string | null;
+  email?: string | null;
+};
+
+// Tipe props untuk komponen Step (tidak berubah)
 interface StepProps {
   register: UseFormRegister<ProfileFormData>;
   errors: FieldErrors<ProfileFormData>;
@@ -57,7 +67,7 @@ interface StepProps {
   watchedName: string;
 }
 
-// --- Komponen untuk setiap langkah ---
+// --- Komponen Step1, Step2, Step3 (Tidak ada perubahan, sudah baik) ---
 
 const Step1 = ({
   setValue,
@@ -81,12 +91,11 @@ const Step1 = ({
     }
 
     setIsUploading(true);
-    const toastId = toast.loading("Mengunggah gambar ke IPFS...");
+    const toastId = toast.loading("Mengunggah gambar...");
 
     try {
       const formData = new FormData();
       formData.append("file", file);
-
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
@@ -99,8 +108,8 @@ const Step1 = ({
 
       const data = await response.json();
       const ipfsUrl = data.ipfsUrl;
-
       const gatewayUrl = ipfsUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
+
       setImagePreview?.(gatewayUrl);
       setValue?.("image", ipfsUrl, { shouldValidate: true });
 
@@ -233,13 +242,15 @@ const Step3 = ({ watchedName, imagePreview }: Partial<StepProps>) => (
   </div>
 );
 
-// --- Komponen Modal Utama ---
+// --- Komponen Modal Utama (Refactored) ---
+
 export function ProfileSetupModal({
   isOpen,
   onFinished,
 }: {
   isOpen: boolean;
-  onFinished: () => Promise<void>;
+  // Perbarui tipe prop onFinished untuk menerima data
+  onFinished: (data: ProfileUpdateData) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
@@ -259,60 +270,44 @@ export function ProfileSetupModal({
 
   const watchedName = watch("name", "Creator Digital");
 
-  // Add this at the end of your ProfileSetupModal component, in the onFormSubmit function:
-
-  // Di ProfileSetupModal.tsx, ganti function onFormSubmit dengan yang ini:
-
-  // Di ProfileSetupModal.tsx, ganti onFormSubmit dengan ini:
-
+  /**
+   * REFACTOR: Fungsi submit form ini sekarang memanggil server action,
+   * dan jika berhasil, akan meneruskan data yang dikembalikan (nama, gambar, email)
+   * ke fungsi onFinished untuk pembaruan sesi yang optimistik.
+   */
   const onFormSubmit = (data: ProfileFormData) => {
-    const formData = new FormData();
-    formData.append("name", data.name);
-    if (data.image) formData.append("image", data.image);
-    if (data.email) formData.append("email", data.email);
-
-    console.log("MODAL: 📤 Mengirim data profil:", data);
-
     startTransition(async () => {
       try {
-        console.log("MODAL: 💾 Memanggil createOrUpdateProfileAction...");
+        const formData = new FormData();
+        formData.append("name", data.name);
+        if (data.image) formData.append("image", data.image);
+        if (data.email) formData.append("email", data.email);
+
         const result = await createOrUpdateProfileAction(formData);
 
-        console.log("MODAL: 📋 Result dari profileAction:", result);
-
-        if (result.success) {
-          console.log("MODAL: ✅ Profil berhasil disimpan ke database");
+        if (result.success && result.data) {
           toast.success("Selamat Datang di Nexaverse!");
-
-          console.log("MODAL: 🚀 Memanggil onFinished untuk update session...");
-          // Langsung panggil onFinished - let provider handle session update
-          await onFinished();
-
-          console.log("MODAL: 🎉 Proses setup profil selesai");
+          // Teruskan data ke onFinished untuk update sesi di sisi client
+          await onFinished(result.data);
         } else {
-          console.error("MODAL: ❌ Gagal menyimpan profil:", result.error);
           toast.error("Gagal menyimpan profil", { description: result.error });
         }
       } catch (error) {
-        console.error(
-          "MODAL: ❌ Error tidak terduga saat submit profil:",
-          error
-        );
         toast.error("Terjadi kesalahan yang tidak terduga");
+        console.error("Error tidak terduga saat submit profil:", error);
       }
     });
   };
+
   const nextStep = async () => {
-    let fieldsToValidate: (keyof ProfileFormData)[] = [];
-    if (step === 2) {
-      fieldsToValidate = ["name", "email"];
-    }
-    const isValidStep = await trigger(fieldsToValidate);
-    if (isValidStep) {
-      setStep((prev) => (prev < 3 ? prev + 1 : prev));
+    const fieldsToValidate: (keyof ProfileFormData)[] =
+      step === 2 ? ["name", "email"] : [];
+    if (await trigger(fieldsToValidate)) {
+      setStep((s) => Math.min(s + 1, 3));
     }
   };
-  const prevStep = () => setStep((prev) => (prev > 1 ? prev - 1 : prev));
+
+  const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
   const steps = [
     { number: 1, title: "Foto Profil" },
@@ -330,77 +325,94 @@ export function ProfileSetupModal({
         )}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <div className="p-8">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3 text-2xl font-bold text-white">
-              <Sparkles className="text-blue-400 h-7 w-7" />
-              <DialogTitle>Buat Profil Anda</DialogTitle>
+        {/* REFACTOR: Membungkus semua konten dengan tag <form> */}
+        <form
+          onSubmit={handleSubmit(onFormSubmit)}
+          className="flex flex-col h-full"
+        >
+          <div className="p-8 flex-grow">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3 text-2xl font-bold text-white">
+                <Sparkles className="text-blue-400 h-7 w-7" />
+                <DialogTitle>Buat Profil Anda</DialogTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                {steps.map((s) => (
+                  <div
+                    key={s.number}
+                    className={cn(
+                      "h-2 w-8 rounded-full transition-colors",
+                      step >= s.number ? "bg-blue-500" : "bg-gray-700"
+                    )}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {steps.map((s) => (
-                <div
-                  key={s.number}
-                  className={cn(
-                    "h-2 w-8 rounded-full transition-colors",
-                    step >= s.number ? "bg-blue-500" : "bg-gray-700"
-                  )}
-                />
-              ))}
-            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ x: 30, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -30, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {step === 1 && (
+                  <Step1
+                    setValue={setValue}
+                    setImagePreview={setImagePreview}
+                    imagePreview={imagePreview}
+                    watchedName={watchedName}
+                  />
+                )}
+                {step === 2 && <Step2 register={register} errors={errors} />}
+                {step === 3 && (
+                  <Step3
+                    watchedName={watchedName}
+                    imagePreview={imagePreview}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ x: 30, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -30, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {step === 1 && (
-                <Step1
-                  setValue={setValue}
-                  setImagePreview={setImagePreview}
-                  imagePreview={imagePreview}
-                  watchedName={watchedName}
-                />
-              )}
-              {step === 2 && <Step2 register={register} errors={errors} />}
-              {step === 3 && (
-                <Step3 watchedName={watchedName} imagePreview={imagePreview} />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div className="flex items-center justify-between p-6 bg-gray-900/50 border-t border-white/10 mt-auto">
-          <Button variant="ghost" onClick={prevStep} disabled={step === 1}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
-          </Button>
-
-          {step < 3 ? (
+          <div className="flex items-center justify-between p-6 bg-gray-900/50 border-t border-white/10 mt-auto">
+            {/* REFACTOR: Tambahkan type="button" untuk mencegah submit form */}
             <Button
-              onClick={nextStep}
-              disabled={step === 2 && (!touchedFields.name || !!errors.name)}
+              type="button"
+              variant="ghost"
+              onClick={prevStep}
+              disabled={step === 1}
             >
-              Lanjut <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
             </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit(onFormSubmit)}
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={isPending || !isValid}
-            >
-              {isPending ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  Selesaikan & Masuk <CheckCircle className="ml-2 h-5 w-5" />
-                </>
-              )}
-            </Button>
-          )}
-        </div>
+
+            {step < 3 ? (
+              <Button
+                type="button" // REFACTOR: Tambahkan type="button"
+                onClick={nextStep}
+                disabled={step === 2 && (!touchedFields.name || !!errors.name)}
+              >
+                Lanjut <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : (
+              // REFACTOR: Tombol ini sekarang menjadi pemicu submit form
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isPending || !isValid}
+              >
+                {isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <>
+                    Selesaikan & Masuk <CheckCircle className="ml-2 h-5 w-5" />
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

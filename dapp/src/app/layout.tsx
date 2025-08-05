@@ -1,35 +1,33 @@
-// src/app/layout.tsx
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { cookieToInitialState } from "wagmi";
-
-import { wagmiConfig } from "@/lib/walletProviders/wallet";
-import Providers from "./providers";
-import "./globals.css";
-
-// 1. Impor Toaster dari sonner
+import { SessionProvider } from "next-auth/react";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Nexaverse App",
   description: "Aplikasi Web3 yang dibangun dengan benar",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookie = (await headers()).get("cookie");
-  const initialState = cookieToInitialState(wagmiConfig, cookie);
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Providers initialState={initialState}>{children}</Providers>
-        {/* 2. Tambahkan komponen Toaster di sini, di luar Providers */}
-        {/* Ini memastikan Toaster ada di level paling atas aplikasi Anda */}
-        <Toaster richColors position="top-center" />
+        <SessionProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster richColors position="top-center" />
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

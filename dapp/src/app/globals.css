@@ -113,15 +113,3 @@
   transform: scale(1.02);
 }
 
-/* --- REKOMENDASI PENGGUNAAN EFEK KACA ---
- *
- * Untuk mendapatkan efek kaca transparan yang sesungguhnya,
- * terapkan kelas berikut pada komponen Card, SideNav, atau Header Anda:
- *
- * className="bg-card/80 backdrop-blur-lg" (untuk dark mode)
- * className="bg-card/60 backdrop-blur-xl" (untuk light mode)
- *
- * Anda bisa menyesuaikan nilai opasitas (80, 60) dan tingkat blur (lg, xl)
- * untuk mencapai efek yang Anda inginkan.
- *
- * ======================================================================== */

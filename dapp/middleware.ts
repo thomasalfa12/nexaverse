@@ -1,15 +1,11 @@
-// middleware.ts
-import { auth } from "@/lib/auth";
-
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const isOnDashboard = req.nextUrl.pathname.startsWith('/dashboard');
-  
-  if (isOnDashboard && !isLoggedIn) {
-    return Response.redirect(new URL('/login', req.nextUrl));
-  }
-});
-
+import NextAuth from 'next-auth';
+import { authConfig } from './auth.config';
+ 
+// Inisialisasi NextAuth dengan konfigurasi dasar dan ekspor fungsi `auth`
+export default NextAuth(authConfig).auth;
+ 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  // Lindungi semua rute KECUALI API, file statis, dan gambar
+  // Ini adalah matcher yang lebih tangguh dan direkomendasikan.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

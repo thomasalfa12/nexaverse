@@ -97,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
+      console.log(`\n--- JWT CALLBACK [Trigger: ${trigger}] ---`);
       // Saat pertama kali sign-in
       if (user) {
         const customUser = user as AuthorizeResult;
@@ -107,12 +108,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name = customUser.name;
         token.image = customUser.image;
         token.email = customUser.email;
+        console.log("JWT: User sign-in, token diinisialisasi.");
         return token;
       }
 
       // HANYA ambil data terbaru saat trigger update (bukan setiap session check)
       if (trigger === "update" && token.id) {
+        console.log("JWT: Memulai proses update token untuk user ID:", token.id);
         try {
+          console.log("JWT: Mengambil data terbaru dari database...");
           const latestUser = await prisma.user.findUnique({ 
             where: { id: token.id as string },
             select: {
@@ -121,20 +125,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               email: true,
             }
           });
+          console.log("JWT: Data dari DB:", latestUser);
           if (latestUser) {
             token.name = latestUser.name;
             token.image = latestUser.image;
             token.email = latestUser.email;
+          } else {
+            console.log("JWT: Pengguna tidak ditemukan saat update.");
           }
         } catch (error) {
           console.error("Error fetching user data in JWT callback:", error);
           // Jangan throw error, return token yang ada
         }
       }
-      
+
+      console.log("JWT: Mengembalikan token final:", { name: token.name, image: !!token.image });
+      console.log("--- JWT CALLBACK END ---");
       return token;
     },
     async session({ session, token }) {
+      console.log("\n--- SESSION CALLBACK ---");
+      console.log("SESSION: Token yang diterima:", { name: token.name, profileComplete: !!token.name });
       if (session.user && token.id) {
         try {
           // Menggunakan Object.assign untuk menghindari type error
@@ -152,6 +163,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.error("Error in session callback:", error);
         }
       }
+      console.log("SESSION: Sesi final yang dikembalikan:", { name: session.user.name, profileComplete: session.user.profileComplete });
+      console.log("--- SESSION CALLBACK END ---\n");
       return session;
     },
   },

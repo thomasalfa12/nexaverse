@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/server/prisma";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { pusherServer } from "@/lib/server/pusher";
+// REFACTOR: Import tipe error spesifik dari Prisma
+import { Prisma } from "@prisma/client";
 
 const profileSchema = z.object({
   name: z.string().min(3, { message: "Nama minimal 3 karakter." }).trim(),
@@ -15,18 +16,18 @@ const profileSchema = z.object({
 interface ProfileResult {
   success: boolean;
   error?: string;
+  data?: {
+    name: string;
+    image: string | null;
+    email: string | null;
+  };
 }
 
 export async function createOrUpdateProfileAction(formData: FormData): Promise<ProfileResult> {
-  console.log("ACTION: 🚀 Memulai createOrUpdateProfileAction");
-  
   const session = await auth();
   if (!session?.user?.id || !session.user.address) {
-    console.log("ACTION: ❌ Unauthorized - no session");
     return { success: false, error: "Unauthorized" };
   }
-  
-  console.log("ACTION: 👤 User authenticated:", session.user.id);
   
   const validation = profileSchema.safeParse({
     name: formData.get("name"),
@@ -35,16 +36,13 @@ export async function createOrUpdateProfileAction(formData: FormData): Promise<P
   });
   
   if (!validation.success) {
-    console.log("ACTION: ❌ Validation failed:", validation.error.errors[0].message);
     return { success: false, error: validation.error.errors[0].message };
   }
   
   const { name, image, email } = validation.data;
-  console.log("ACTION: 📝 Data to update:", { name, image, email });
 
   try {
-    console.log("ACTION: 💾 Updating database...");
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { walletAddress: session.user.address },
       data: {
         name,
@@ -53,35 +51,29 @@ export async function createOrUpdateProfileAction(formData: FormData): Promise<P
       },
     });
 
-    console.log("ACTION: ✅ Database updated successfully");
-
-    // Revalidate paths
     revalidatePath("/", "layout");
     
-    // KIRIM SINYAL PUSHER - INI YANG PENTING!
-    console.log("ACTION: 📡 Sending Pusher notification...");
-    const channelName = `private-user-${session.user.id}`;
-    const eventName = 'session:refresh';
-    
-    try {
-      await pusherServer.trigger(channelName, eventName, { 
-        message: "Profile updated, please refresh session.",
-        timestamp: new Date().toISOString()
-      });
-      console.log("ACTION: ✅ Pusher notification sent successfully");
-    } catch (pusherError) {
-      console.error("ACTION: ⚠️ Pusher error (non-critical):", pusherError);
-      // Jangan gagalkan action jika pusher error
-    }
-    
-    console.log("ACTION: 🎉 Profile action completed successfully");
-    return { success: true };
+    return { 
+      success: true,
+      data: {
+        name: updatedUser.name!,
+        image: updatedUser.image,
+        email: updatedUser.email,
+      }
+    };
     
   } catch (error) {
     console.error("ACTION: ❌ Database error:", error);
-    if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        return { success: false, error: "Email ini sudah digunakan oleh akun lain." };
+
+    // REFACTOR: Ganti pengecekan 'any' dengan pengecekan instance error Prisma yang type-safe
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002 adalah kode untuk pelanggaran unique constraint (misal: email sudah ada)
+      if (error.code === 'P2002') {
+          return { success: false, error: "Email ini sudah digunakan oleh akun lain." };
+      }
     }
+    
+    // Fallback untuk error lainnya
     return { success: false, error: "Gagal menyimpan profil ke database." };
   }
 }

@@ -1,22 +1,40 @@
-// app/dashboard/(main)/page.tsx
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Loader2, Search, XCircle } from "lucide-react";
+// FIX: Tambahkan LayoutDashboard dan BookOpen ke dalam import
+import {
+  Loader2,
+  XCircle,
+  FileText,
+  Video,
+  ClipboardCheck,
+  HelpCircle,
+  Sparkles,
+  Rocket,
+  LayoutDashboard,
+  BookOpen,
+} from "lucide-react";
 
-// FIX 1: Mengimpor tipe data 'CourseWithStats' yang benar dari file types Anda.
 import type { CourseWithStats } from "@/types";
-
 import { CourseCard } from "@/components/discovery/CourseCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-// Komponen untuk menampilkan tombol filter kategori
+// --- Komponen Filter Kategori yang Disempurnakan ---
+const categoryIcons: { [key: string]: React.ElementType } = {
+  "Smart Contract": FileText,
+  DeFi: Sparkles,
+  NFT: Video,
+  "Blockchain Fundamental": Rocket,
+  "Web3 Development": ClipboardCheck,
+  DAO: HelpCircle,
+  Security: HelpCircle,
+  Semua: LayoutDashboard,
+};
+
 const CategoryFilters = ({
   categories,
   selected,
@@ -25,43 +43,51 @@ const CategoryFilters = ({
   categories: string[];
   selected: string;
   onSelect: (category: string) => void;
-}) => (
-  <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 mb-12">
-    {["Semua", ...categories].map((category) => (
-      <Button
-        key={category}
-        variant="outline"
-        size="lg"
-        onClick={() => onSelect(category)}
-        className={cn(
-          "rounded-full transition-all duration-200",
-          selected === category
-            ? "border-primary bg-primary/10 text-primary font-semibold ring-2 ring-primary/50"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        )}
-      >
-        {category}
-      </Button>
-    ))}
-  </div>
-);
+}) => {
+  const allCategories = ["Semua", ...categories];
 
-// Komponen utama halaman dasbor/penemuan
+  return (
+    <div className="flex items-center justify-center gap-3 md:gap-4 mb-16 flex-wrap">
+      {allCategories.map((category) => {
+        const Icon = categoryIcons[category] || BookOpen;
+        return (
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            key={category}
+          >
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => onSelect(category)}
+              className={cn(
+                "rounded-full transition-all duration-300 ease-in-out border-2 h-14 px-6 text-base font-semibold",
+                selected === category
+                  ? "border-primary bg-primary/10 text-primary ring-4 ring-primary/20"
+                  : "bg-background/50 border-border/50 text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-primary/50"
+              )}
+            >
+              <Icon className="mr-2.5 h-5 w-5" />
+              {category}
+            </Button>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
+
+// --- Komponen Utama Halaman Discovery ---
 export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(true);
-  // FIX 2: State 'courses' sekarang menggunakan tipe data CourseWithStats[] yang benar.
   const [courses, setCourses] = useState<CourseWithStats[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-
-  // State untuk fungsionalitas filter dan pencarian
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Mengambil data kursus dan kategori secara bersamaan untuk efisiensi
         const [coursesRes, categoriesRes] = await Promise.all([
           fetch("/api/community/discovery"),
           fetch("/api/community/categories"),
@@ -80,32 +106,19 @@ export default function DiscoveryPage() {
     fetchData();
   }, []);
 
-  // Logika untuk memfilter kursus berdasarkan kategori dan pencarian
   const filteredCourses = useMemo(() => {
-    return courses
-      .filter((course) => {
-        // Filter berdasarkan kategori
-        if (selectedCategory === "Semua") return true;
-        return course.category === selectedCategory;
-      })
-      .filter((course) => {
-        // Filter berdasarkan pencarian teks (judul atau kreator)
-        if (!searchTerm) return true;
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          course.title.toLowerCase().includes(searchLower) ||
-          course.creator.name.toLowerCase().includes(searchLower)
-        );
-      });
-  }, [courses, selectedCategory, searchTerm]);
+    if (selectedCategory === "Semua") return courses;
+    return courses.filter((course) => course.category === selectedCategory);
+  }, [courses, selectedCategory]);
 
-  // Fungsi untuk me-render konten utama (loading, hasil, atau pesan kosong)
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex justify-center items-center h-64">
+        <div className="flex flex-col justify-center items-center h-64 gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="ml-4 text-lg">Memuat Kursus...</p>
+          <p className="text-lg text-muted-foreground">
+            Memuat Kursus Terbaik...
+          </p>
         </div>
       );
     }
@@ -114,20 +127,18 @@ export default function DiscoveryPage() {
       return (
         <motion.div
           layout
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
         >
-          {filteredCourses.map((course) => (
+          {filteredCourses.map((course, index) => (
             <motion.div
               key={course.id}
               layout
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.05 }}
               className="h-full"
             >
               <Link href={`/courses/${course.id}`} className="h-full block">
-                {/* FIX 3: Mengirim prop 'course' ke komponen CourseCard, bukan 'template'. */}
                 <CourseCard course={course} />
               </Link>
             </motion.div>
@@ -136,43 +147,42 @@ export default function DiscoveryPage() {
       );
     }
 
-    // Tampilan jika tidak ada hasil yang cocok dengan filter
     return (
       <div className="text-center py-20 bg-muted/50 rounded-xl">
         <XCircle className="mx-auto h-16 w-16 text-muted-foreground/70" />
-        <h3 className="mt-6 text-2xl font-semibold">Tidak Ditemukan</h3>
+        <h3 className="mt-6 text-2xl font-semibold">Tidak Ada Kursus</h3>
         <p className="mt-2 text-muted-foreground max-w-sm mx-auto">
-          Tidak ada kursus yang cocok dengan filter atau pencarian Anda. Coba
-          gunakan kata kunci atau kategori lain.
+          Tidak ada kursus yang tersedia dalam kategori ini. Coba pilih kategori
+          lain.
         </p>
       </div>
     );
   };
 
   return (
-    <div className="container mx-auto py-12 px-4">
-      {/* Bagian Hero */}
-      <div className="text-center mb-10">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight lg:text-6xl">
-          Jelajahi Ekosistem Kursus
-        </h1>
-        <p className="mt-4 text-lg text-muted-foreground max-w-3xl mx-auto">
-          Temukan pengetahuan baru, tingkatkan keahlian Anda, dan dapatkan
-          kredensial on-chain dari para ahli di dunia Web3.
-        </p>
-      </div>
-
-      {/* Bilah Pencarian */}
-      <div className="mb-8 max-w-2xl mx-auto">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Cari berdasarkan judul kursus atau nama kreator..."
-            className="w-full pl-12 h-14 text-base rounded-full shadow-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+    <div className="container mx-auto py-4 px-2">
+      {/* Hero Section Baru */}
+      <div className="relative text-center mb-16 py-20 md:py-28 rounded-3xl overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 via-purple-900/80 to-gray-900/80 z-0" />
+        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-repeat opacity-10" />
+        <div className="relative z-10 px-4">
+          <motion.h1
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white"
+          >
+            Jelajahi Galaksi Pengetahuan
+          </motion.h1>
+          <motion.p
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
+            className="mt-6 text-lg md:text-xl text-blue-200/80 max-w-3xl mx-auto"
+          >
+            Temukan kursus Web3 terkurasi, tingkatkan keahlian Anda, dan
+            dapatkan kredensial on-chain yang membuktikan pencapaian Anda.
+          </motion.p>
         </div>
       </div>
 
@@ -185,8 +195,10 @@ export default function DiscoveryPage() {
         />
       )}
 
-      {/* Konten Kursus yang Dirender */}
-      <div className="mt-8">{renderContent()}</div>
+      {/* Konten Kursus */}
+      <div className="mt-8">
+        <AnimatePresence>{renderContent()}</AnimatePresence>
+      </div>
     </div>
   );
 }

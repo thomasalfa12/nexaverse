@@ -89,9 +89,12 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  coverImage    String?
   walletAddress String    @unique
   roles         String? // Disimpan sebagai JSON string
   entityId      Int? // Link ke profil VerifiedEntity jika ada
+
+  verifiedEntity VerifiedEntity? @relation(fields: [entityId], references: [id])
 
   accounts         Account[]
   sessions         Session[]
@@ -130,6 +133,7 @@ model VerifiedEntity {
   // Relasi ke Course dan Credential yang dibuat oleh entitas ini
   createdCourses     Course[]
   createdCredentials Credential[]
+  User               User[]
 }
 
 // Proses klaim lencana terverifikasi untuk sebuah entitas

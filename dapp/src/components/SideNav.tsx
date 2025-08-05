@@ -1,4 +1,3 @@
-// src/components/SideNav.tsx
 "use client";
 
 // --- Impor React & Next.js ---
@@ -7,14 +6,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
 // --- Impor dari library ---
+import { useDisconnect, useAccount } from "wagmi";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useTheme } from "next-themes"; // PERBAIKAN: Impor useTheme
+import { useTheme } from "next-themes";
 import { useSession, signOut } from "next-auth/react";
-import { useClaims } from "@/hooks/useClaims"; // Impor hook baru
+import { useClaims } from "@/hooks/useClaims";
 
 // --- UI & Icons ---
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,16 +29,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipProvider,
@@ -63,7 +70,11 @@ import {
   Moon,
   Award,
   Sun,
-} from "lucide-react"; // PERBAIKAN: Menambahkan Moon & Sun
+  Search,
+  Network,
+  BookOpen,
+} from "lucide-react";
+import { DialogTitle } from "@radix-ui/react-dialog";
 
 // --- Konfigurasi Menu & Fungsi Filter ---
 export type NavItemConfig = {
@@ -112,10 +123,7 @@ const filterMenuByRoles = (
           return { ...item, children: filteredChildren };
         return null;
       }
-      if (
-        !item.roles ||
-        item.roles.some((requiredRole) => userRoles.includes(requiredRole))
-      ) {
+      if (!item.roles || item.roles.some((role) => userRoles.includes(role))) {
         return item;
       }
       return null;
@@ -124,192 +132,190 @@ const filterMenuByRoles = (
 };
 
 // ============================================================================
-// --- Komponen Utama: SideNav ---
+// --- Komponen-Komponen Pendukung (Helper Components) ---
 // ============================================================================
-export default function SideNav({ children }: { children: React.ReactNode }) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const pathname = usePathname();
-  const { data: session, status } = useSession(); // <-- Panggilan baru
-  const isLoading = status === "loading";
-  const user = session?.user;
-  const userRoles = user?.roles || [];
-  const accessibleMenu = filterMenuByRoles(menuConfig, userRoles);
+
+function CommandPalette({ menu }: { menu: NavItemConfig[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    if (window.innerWidth < 640) setIsSidebarCollapsed(true);
-  }, [pathname]);
-
-  return (
-    // PERBAIKAN: Menghapus bg-gray-100 dark:bg-black agar tema global dari body berlaku
-    <div className="flex min-h-screen w-full">
-      <TooltipProvider>
-        <aside
-          className={cn(
-            "fixed inset-y-0 left-0 z-20 hidden h-full flex-col border-r transition-all duration-300 ease-in-out sm:flex",
-            "bg-card/80 dark:bg-card/60 backdrop-blur-xl border-border/50",
-            isSidebarCollapsed ? "w-20" : "w-64"
-          )}
-        >
-          <NavContent
-            isCollapsed={isSidebarCollapsed}
-            onCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            isLoading={isLoading}
-            menu={accessibleMenu}
-          />
-        </aside>
-      </TooltipProvider>
-      <div
-        className={cn(
-          "flex w-full flex-col transition-all duration-300 ease-in-out",
-          isSidebarCollapsed ? "sm:pl-20" : "sm:pl-64"
-        )}
-      >
-        <header
-          className={cn(
-            "sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b px-4 sm:px-6",
-            "bg-background/80 dark:bg-background/60 backdrop-blur-lg border-border/50"
-          )}
-        >
-          <div className="flex items-center gap-4">
-            <div className="sm:hidden">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent
-                  side="left"
-                  className="w-64 p-0 bg-card/95 backdrop-blur-lg border-r"
-                >
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>Menu Navigasi</SheetTitle>
-                    <SheetDescription>
-                      Pilih halaman tujuan dari daftar menu yang tersedia.
-                    </SheetDescription>
-                  </SheetHeader>
-                  <NavContent
-                    isCollapsed={false}
-                    isLoading={isLoading}
-                    menu={accessibleMenu}
-                  />
-                </SheetContent>
-              </Sheet>
-            </div>
-            <Breadcrumbs menu={accessibleMenu} />
-          </div>
-          <UserMenu />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6">{children}</div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- Komponen Pendukung ---
-
-const MenuSkeleton = () => (
-  <div className="grid items-start gap-2 px-3 animate-pulse">
-    {[...Array(5)].map((_, i) => (
-      <Skeleton key={i} className="h-10 w-full" />
-    ))}
-  </div>
-);
-
-function Breadcrumbs({ menu }: { menu: NavItemConfig[] }) {
-  const pathname = usePathname();
-  const segments = pathname.split("/").filter(Boolean);
-  const findLabel = (path: string): string | null => {
-    for (const item of menu) {
-      if (item.href === path) return item.label;
-      if (item.children) {
-        for (const child of item.children) {
-          if (child.href === path) return child.label;
-        }
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsOpen((open) => !open);
       }
-    }
-    return null;
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
+
+  const runCommand = (command: () => void) => {
+    setIsOpen(false);
+    command();
   };
-  if (segments.length <= 1)
-    return <h1 className="text-xl font-semibold">Discover</h1>;
+
   return (
-    <div className="flex items-center gap-2 text-sm sm:text-base">
-      {segments.map((segment, index) => {
-        const path = `/${segments.slice(0, index + 1).join("/")}`;
-        const label =
-          findLabel(path) || segment.charAt(0).toUpperCase() + segment.slice(1);
-        const isLast = index === segments.length - 1;
-        return (
-          <div key={path} className="flex items-center gap-2">
-            <span
-              className={cn(
-                "font-semibold",
-                isLast ? "text-primary" : "text-muted-foreground"
-              )}
-            >
-              {label}
-            </span>
-            {!isLast && (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+    <>
+      <Button
+        variant="outline"
+        className="h-9 w-9 p-0 md:w-auto md:px-4 md:py-2 md:justify-start"
+        onClick={() => setIsOpen(true)}
+      >
+        <Search className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline-block text-muted-foreground">
+          Cari...
+        </span>
+        <kbd className="hidden md:inline-block pointer-events-none ml-4 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100">
+          <span className="text-xs">⌘</span>K
+        </kbd>
+      </Button>
+      <CommandDialog open={isOpen} onOpenChange={setIsOpen}>
+        {/* FIX: Menambahkan DialogTitle yang tersembunyi untuk aksesibilitas */}
+        <DialogTitle className="sr-only">Command Palette</DialogTitle>
+        <CommandInput placeholder="Ketik perintah atau cari..." />
+        <CommandList>
+          <CommandEmpty>Tidak ada hasil.</CommandEmpty>
+          <CommandGroup heading="Navigasi">
+            {menu.flatMap((item) =>
+              item.children ? (
+                item.children.map((child) => (
+                  <CommandItem
+                    key={child.href}
+                    onSelect={() => runCommand(() => router.push(child.href))}
+                  >
+                    <child.icon className="mr-2 h-4 w-4" />
+                    <span>{child.label}</span>
+                  </CommandItem>
+                ))
+              ) : (
+                <CommandItem
+                  key={item.href}
+                  onSelect={() => runCommand(() => router.push(item.href))}
+                >
+                  <item.icon className="mr-2 h-4 w-4" />
+                  <span>{item.label}</span>
+                </CommandItem>
+              )
             )}
-          </div>
-        );
-      })}
-    </div>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Kursus (Contoh)">
+            <CommandItem>
+              <BookOpen className="mr-2 h-4 w-4" />
+              <span>Belajar Nodejs Dasar</span>
+            </CommandItem>
+            <CommandItem>
+              <BookOpen className="mr-2 h-4 w-4" />
+              <span>Pengenalan Smart Contract</span>
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+    </>
   );
 }
 
-function NavContent({
-  isCollapsed,
-  onCollapse,
-  isLoading,
-  menu,
-}: {
-  isCollapsed: boolean;
-  onCollapse?: () => void;
-  isLoading: boolean;
-  menu: NavItemConfig[];
-}) {
+function UserMenu() {
+  const router = useRouter();
+  const { setTheme } = useTheme();
+  const { claimsCount } = useClaims();
+  const { data: session, status } = useSession();
+  const { disconnect } = useDisconnect();
+
+  const handleLogout = async () => {
+    await signOut({ redirect: false });
+    disconnect();
+    router.replace("/");
+  };
+
+  if (status === "loading")
+    return <Skeleton className="h-10 w-10 rounded-full" />;
+  if (status === "unauthenticated")
+    return (
+      <Button onClick={() => router.push("/")}>
+        <LogIn className="mr-2 h-4 w-4" /> Sign In
+      </Button>
+    );
+
+  const user = session?.user;
+  const userInitial = user?.name
+    ? user.name.charAt(0).toUpperCase()
+    : user?.address?.slice(2, 4).toUpperCase();
+
   return (
-    <div className="flex h-full flex-col">
-      <div
-        className={cn(
-          "flex h-16 items-center border-b border-border/50 px-4",
-          isCollapsed ? "justify-center" : "justify-between"
-        )}
-      >
-        {!isCollapsed && (
-          <Link
-            href="/dashboard"
-            className="text-xl font-bold tracking-tight text-primary"
-          >
-            Nexaverse
-          </Link>
-        )}
-        {onCollapse && (
-          <Button variant="ghost" size="icon" onClick={onCollapse}>
-            {isCollapsed ? (
-              <PanelRightClose className="h-5 w-5" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" />
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+          <Avatar className="h-9 w-9 border-2 border-primary/50">
+            <AvatarImage
+              src={user?.image || undefined}
+              alt={user?.name || "User Avatar"}
+            />
+            <AvatarFallback>{userInitial}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-64" align="end" forceMount>
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-semibold leading-none">
+              {user?.name || "Creator Digital"}
+            </p>
+            <p className="text-xs leading-none text-muted-foreground font-mono">
+              {user?.address
+                ? `${user.address.slice(0, 6)}...${user.address.slice(-4)}`
+                : ""}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
+            <User className="mr-2" />
+            <span>Profil</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/dashboard/claims")}>
+            <Award className="mr-2" />
+            <span>Klaim Saya</span>
+            {claimsCount > 0 && (
+              <Badge variant="secondary" className="ml-auto">
+                {claimsCount}
+              </Badge>
             )}
-          </Button>
-        )}
-      </div>
-      <ScrollArea className="flex-1 py-4">
-        {isLoading ? (
-          <MenuSkeleton />
-        ) : (
-          <nav className="grid items-start gap-1 px-3">
-            {menu.map((item) => (
-              <NavItem key={item.href} item={item} isCollapsed={isCollapsed} />
-            ))}
-          </nav>
-        )}
-      </ScrollArea>
-    </div>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Sun className="mr-2 h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute mr-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span>Ganti Tema</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => setTheme("light")}>
+                Light
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme("dark")}>
+                Dark
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme("system")}>
+                System
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleLogout}
+          className="text-red-500 focus:bg-red-500/10 focus:text-red-500"
+        >
+          <LogOut className="mr-2" />
+          <span>Keluar</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -325,9 +331,11 @@ function NavItem({
     ? pathname.startsWith(item.href)
     : pathname === item.href;
   const [isOpen, setIsOpen] = useState(isActive);
+
   useEffect(() => {
     setIsOpen(pathname.startsWith(item.href));
   }, [pathname, item.href]);
+
   const { href, label, icon: Icon, isBeta, children } = item;
 
   const content = (
@@ -398,92 +406,152 @@ function NavItem({
   return linkWrapper;
 }
 
-function UserMenu() {
-  const router = useRouter();
-  const { theme, setTheme } = useTheme();
-  const { claimsCount } = useClaims();
-
-  // GANTI: Semua state management sekarang terpusat di useSession
-  const { data: session, status } = useSession();
-
-  // GANTI: Fungsi logout menjadi jauh lebih sederhana
-  const handleLogout = async () => {
-    // signOut akan menghapus cookie sesi dan mengarahkan pengguna
-    await signOut({ callbackUrl: "/" });
-  };
-
-  // GANTI: Pengecekan status loading
-  if (status === "loading") {
-    return <Skeleton className="h-10 w-10 rounded-full" />;
-  }
-
-  // GANTI: Pengecekan status tidak terotentikasi
-  if (status === "unauthenticated") {
-    return (
-      <Button onClick={() => router.push("/")}>
-        <LogIn className="mr-2 h-4 w-4" /> Sign In
-      </Button>
-    );
-  }
-  // GANTI: Sumber data pengguna sekarang tunggal, yaitu dari `session`
-  const addr = session?.user?.address;
-  const userName = session?.user?.name;
-  const userInitial = userName
-    ? userName.charAt(0).toUpperCase()
-    : addr?.slice(2, 4).toUpperCase();
+function NavContent({
+  isCollapsed,
+  menu,
+  isLoading,
+}: {
+  isCollapsed: boolean;
+  menu: NavItemConfig[];
+  isLoading: boolean;
+}) {
+  const { chain } = useAccount();
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-9 w-9 border-2 border-primary/50">
-            <AvatarFallback>{userInitial}</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">
-              {userName || "Digital Creator"}
-            </p>
-            <p className="text-xs leading-none text-muted-foreground font-mono">
-              {addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ""}
-            </p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
-          <User className="mr-2 h-4 w-4" />
-          <span>Profile</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/dashboard/claims")}>
-          <Award className="mr-2 h-4 w-4" />
-          <span>Klaim Saya</span>
-          {claimsCount > 0 && (
-            <Badge variant="secondary" className="ml-auto">
-              {claimsCount}
-            </Badge>
-          )}
-        </DropdownMenuItem>
+    <div className="flex h-full flex-col">
+      <div
+        className={cn(
+          "flex h-16 items-center border-b px-4",
+          isCollapsed ? "justify-center" : "justify-between"
+        )}
+      >
+        {!isCollapsed && (
+          <Link
+            href="/dashboard"
+            className="text-xl font-bold tracking-tight text-primary"
+          >
+            Nexaverse
+          </Link>
+        )}
+      </div>
 
-        {/* PERBAIKAN: Menambahkan item menu untuk mengganti tema */}
-        <DropdownMenuItem
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          {theme === "dark" ? (
-            <Sun className="mr-2 h-4 w-4" />
-          ) : (
-            <Moon className="mr-2 h-4 w-4" />
+      <ScrollArea className="flex-1 py-4">
+        {isLoading ? (
+          <div className="grid items-start gap-2 px-3 animate-pulse">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <nav className="grid items-start gap-1 px-3">
+            {menu.map((item) => (
+              <NavItem key={item.href} item={item} isCollapsed={isCollapsed} />
+            ))}
+          </nav>
+        )}
+      </ScrollArea>
+
+      <div className="mt-auto border-t p-3">
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-md p-2 text-sm transition-colors",
+            isCollapsed && "justify-center"
           )}
-          <span>Ganti Tema</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        >
+          <Network className="h-5 w-5 text-green-500" />
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="font-semibold text-foreground">Jaringan</span>
+              <span className="text-muted-foreground">
+                {chain?.name || "Tidak Terhubung"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// --- Komponen Layout Utama yang Menggabungkan Semuanya ---
+// ============================================================================
+export default function SideNav({ children }: { children: React.ReactNode }) {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { data: session, status } = useSession();
+  const isLoading = status === "loading";
+  const userRoles = session?.user?.roles || [];
+  const accessibleMenu = filterMenuByRoles(menuConfig, userRoles);
+
+  useEffect(() => {
+    const checkSize = () => setIsSidebarCollapsed(window.innerWidth < 1024);
+    checkSize();
+    window.addEventListener("resize", checkSize);
+    return () => window.removeEventListener("resize", checkSize);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen w-full">
+      <TooltipProvider>
+        <aside
+          className={cn(
+            "fixed inset-y-0 left-0 z-20 hidden h-full flex-col border-r bg-background/80 backdrop-blur-lg transition-all duration-300 ease-in-out sm:flex",
+            isSidebarCollapsed ? "w-20" : "w-64"
+          )}
+        >
+          <NavContent
+            isCollapsed={isSidebarCollapsed}
+            menu={accessibleMenu}
+            isLoading={isLoading}
+          />
+        </aside>
+      </TooltipProvider>
+      <div
+        className={cn(
+          "flex w-full flex-col transition-all duration-300 ease-in-out",
+          isSidebarCollapsed ? "sm:pl-20" : "sm:pl-64"
+        )}
+      >
+        <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden sm:inline-flex"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            >
+              {isSidebarCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
+            </Button>
+            <div className="sm:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Menu />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  side="left"
+                  className="w-64 p-0 bg-card/95 backdrop-blur-lg border-r"
+                >
+                  <NavContent
+                    isCollapsed={false}
+                    menu={accessibleMenu}
+                    isLoading={isLoading}
+                  />
+                </SheetContent>
+              </Sheet>
+            </div>
+            <h1 className="text-xl font-semibold hidden md:block">Dashboard</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <CommandPalette menu={accessibleMenu} />
+            <UserMenu />
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 sm:p-6">{children}</div>
+        </main>
+      </div>
+    </div>
   );
 }

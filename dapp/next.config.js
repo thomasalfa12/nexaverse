@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ['framer-motion'],
+
   webpack: (config) => {
     config.resolve.alias["pino-pretty"] = false;
     return config;
@@ -39,14 +41,6 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
-  },
-
-  // Tambahkan baris ini untuk skip lint & type error (Next.js 13+)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
   },
 };
 
